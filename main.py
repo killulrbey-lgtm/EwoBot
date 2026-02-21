@@ -1,4 +1,4 @@
-import discord
+mport discord
 from discord.ext import commands, tasks
 import json
 import random
@@ -16,6 +16,33 @@ app = Flask(__name__)
 @app.route("/")
 def home():
     return "Bot aktif!"
+
+def run():
+    app.run(host="0.0.0.0", port=10000)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+keep_alive()
+
+# ================= DISCORD BOT =================
+
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+
+bot = commands.Bot(
+    command_prefix="q!",
+    intents=intents,
+    help_command=None
+)
+
+# ================= BOT READY =================
+
+@bot.event
+async def on_ready():
+    print(f"{bot.user} aktif!")
 
 def run():
     app.run(host="0.0.0.0", port=10000)
