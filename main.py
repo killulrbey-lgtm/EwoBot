@@ -94,7 +94,7 @@ async def ping(ctx):
     await ctx.send("Pong!")
 
 # ================= DATA =================
-
+def load_data():
     try:
         with open("data.json", "r") as f:
             return json.load(f)
@@ -105,13 +105,7 @@ def save_data(data):
     with open("data.json", "w") as f:
         json.dump(data, f, indent=4)
 
-data = load_data()
-
-def save_data(data):
-    with open("data.json", "w") as f:
-        json.dump(data, f, indent=4)
-
-data = load_data()
+data = load_data()   # ✅ fonksiyon tanımlandıktan sonra çağırıyoruz
 
 def formatla(sayi):
     return f"{int(sayi):,}".replace(",", ".")
