@@ -24,8 +24,6 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-keep_alive()
-
 # ================= DISCORD BOT =================
 
 intents = discord.Intents.default()
@@ -2543,4 +2541,5 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_modal(TicketCevapModal(user_id))
     
 
-bot.run(os.getenv("TOKEN"))
+TOKEN = os.getenv("TOKEN")
+bot.run(TOKEN)
