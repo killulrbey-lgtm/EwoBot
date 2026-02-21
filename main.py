@@ -1,12 +1,13 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import json
 import random
 import asyncio
 import datetime
 import os
 
-# Flask kısmı
+# ================= FLASK KEEP ALIVE =================
+
 from flask import Flask
 from threading import Thread
 
@@ -25,17 +26,11 @@ def keep_alive():
 
 keep_alive()
 
-@bot.event
-async def on_ready():
-    print(f"{bot.user} aktif!")
-
-@bot.command()
-async def ping(ctx):
-    await ctx.send("Pong!")
+# ================= DISCORD BOT =================
 
 intents = discord.Intents.default()
 intents.members = True
-intents.message_content = True  # ← BUNU EKLE
+intents.message_content = True
 
 bot = commands.Bot(
     command_prefix="q!",
@@ -43,12 +38,47 @@ bot = commands.Bot(
     help_command=None
 )
 
-def load_data():
+# ================= BOT READY =================
+
+@bot.event
+async def on_ready():
+    print(f"{bot.user} aktif!")
+
+    # Task'ler burada başlatılır
+    try:
+        durum_degistir.start()
+    except:
+        pass
+
+    try:
+        global_zenginler_gonder.start()
+    except:
+        pass
+
+    try:
+        enflasyon_gonder.start()
+    except:
+        pass
+
+# ================= TEST KOMUT =================
+
+@bot.command()
+async def ping(ctx):
+    await ctx.send("Pong!")
+
+# ================= DATA =================
+
     try:
         with open("data.json", "r") as f:
             return json.load(f)
     except:
         return {}
+
+def save_data(data):
+    with open("data.json", "w") as f:
+        json.dump(data, f, indent=4)
+
+data = load_data()
 
 def save_data(data):
     with open("data.json", "w") as f:
