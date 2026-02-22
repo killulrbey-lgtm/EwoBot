@@ -20,6 +20,7 @@ client = MongoClient(MONGO_URI)
 db = client["EwoBotDB"]
 
 collection = db["users"]
+economy_col = db["ekonomi"]  
 ekonomi_collection = db["ekonomi"]
 settings_collection = db["settings"]
 
