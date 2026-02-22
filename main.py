@@ -868,34 +868,37 @@ async def help(ctx):
 @bot.command()
 async def gzenginler(ctx):
 
-    top_users = collection.find(
-        {"yatirimlar.ewopluscoin": {"$gt": 0}}
-    ).sort("yatirimlar.ewopluscoin", -1).limit(10)
+    tum_kullanicilar = collection.find()
+
+    liste = []
+
+    for user in tum_kullanicilar:
+        miktar = user.get("yatirimlar", {}).get("EwoPlusCoin", 0)
+
+        if miktar > 0:
+            liste.append((user["_id"], miktar))
+
+    sirali = sorted(liste, key=lambda x: x[1], reverse=True)[:10]
 
     embed = discord.Embed(
         title="🌍 Global EwoPlusCoin Zenginleri",
-        description="En çok EwoPlusCoin'e sahip 10 kişi",
         color=discord.Color.gold()
     )
 
-    sira = 1
+    if not sirali:
+        embed.description = "Henüz EwoPlusCoin sahibi kimse yok."
+        return await ctx.send(embed=embed)
 
-    for user in top_users:
-        miktar = user.get("yatirimlar", {}).get("ewopluscoin", 0)
-
+    for i, (user_id, miktar) in enumerate(sirali, 1):
         try:
-            uye = await bot.fetch_user(int(user["_id"]))
+            uye = await bot.fetch_user(int(user_id))
             embed.add_field(
-                name=f"{sira}. {uye.name}",
+                name=f"{i}. {uye.name}",
                 value=f"💎 {formatla(miktar)} EwoPlusCoin",
                 inline=False
             )
-            sira += 1
         except:
             continue
-
-    if sira == 1:
-        embed.description = "Henüz EwoPlusCoin sahibi kimse yok."
 
     await ctx.send(embed=embed)
 
@@ -910,54 +913,47 @@ async def otomatik_gzenginler():
     kanal = bot.get_channel(kanal_id)
 
     if not kanal:
-        print("Global zenginler kanalı bulunamadı.")
+        print("Kanal bulunamadı")
         return
 
-    # Sadece ewopluscoin > 0 olanlar
-    top_users = collection.find(
-        {"yatirimlar.ewopluscoin": {"$gt": 0}}
-    ).sort("yatirimlar.ewopluscoin", -1).limit(10)
+    tum_kullanicilar = collection.find()
+
+    liste = []
+
+    for user in tum_kullanicilar:
+        miktar = user.get("yatirimlar", {}).get("EwoPlusCoin", 0)
+
+        if miktar > 0:
+            liste.append((user["_id"], miktar))
+
+    sirali = sorted(liste, key=lambda x: x[1], reverse=True)[:10]
 
     embed = discord.Embed(
         title="🌍 Global EwoPlusCoin Zenginleri",
-        description="En çok EwoPlusCoin'e sahip 10 kişi",
         color=discord.Color.gold()
     )
 
-    sira = 1
-
-    for user in top_users:
-        miktar = user.get("yatirimlar", {}).get("ewopluscoin", 0)
-
-        try:
-            uye = await bot.fetch_user(int(user["_id"]))
-            embed.add_field(
-                name=f"{sira}. {uye.name}",
-                value=f"💎 {formatla(miktar)} EwoPlusCoin",
-                inline=False
-            )
-            sira += 1
-        except:
-            continue
-
-    if sira == 1:
+    if not sirali:
         embed.description = "Henüz EwoPlusCoin sahibi kimse yok."
+    else:
+        for i, (user_id, miktar) in enumerate(sirali, 1):
+            try:
+                uye = await bot.fetch_user(int(user_id))
+                embed.add_field(
+                    name=f"{i}. {uye.name}",
+                    value=f"💎 {formatla(miktar)} EwoPlusCoin",
+                    inline=False
+                )
+            except:
+                continue
 
-    embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
+    # Mesaj güncelleme
+    async for msg in kanal.history(limit=10):
+        if msg.author == bot.user:
+            await msg.edit(embed=embed)
+            return
 
-    # 🔥 MESAJ GÜNCELLEME SİSTEMİ
-    try:
-        # Son 10 mesajı kontrol et
-        async for msg in kanal.history(limit=10):
-            if msg.author == bot.user:
-                await msg.edit(embed=embed)
-                return
-
-        # Eğer bot mesajı yoksa yeni at
-        await kanal.send(embed=embed)
-
-    except Exception as e:
-        print("Global zenginler mesaj güncellenemedi:", e)
+    await kanal.send(embed=embed)
 
 @bot.command()
 async def szenginler(ctx):
