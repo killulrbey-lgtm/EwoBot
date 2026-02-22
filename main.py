@@ -60,8 +60,11 @@ intents.message_content = True
 def get_prefix(bot, message):
     prefixes = [
         "q!",
+        "Q!",
         "q",
+        "Q",
         "ewo ",
+        "Ewo ",
         "!"
     ]
     return commands.when_mentioned_or(*prefixes)(bot, message)
