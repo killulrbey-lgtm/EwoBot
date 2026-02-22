@@ -604,92 +604,113 @@ async def dilen(ctx):
 
 # ================== EKONOMİ KOMUTU ==================
 
-@bot.command()
-@commands.cooldown(1, 4, commands.BucketType.user)
+@bot.command(name="ekonomi")
 async def ekonomi(ctx):
 
     embed = discord.Embed(
-        title="📊 EwoEkonomi Sistemi",
-        color=discord.Color.blue()
+        title="📊 EwoBot Global Ekonomi",
+        description="Güncel yatırım varlık fiyatları aşağıdadır.\nAlmak için: `q!satınal varlık miktar`\nSatmak için: `q!sat varlık miktar`",
+        color=discord.Color.dark_blue()
     )
 
-    for varlik in ekonomi_collection.find():
+    for varlik, varsayilan_fiyat in varsayilan_varlikler.items():
+
+        veri = economy_col.find_one({"_id": varlik})
+
+        if not veri:
+            fiyat = varsayilan_fiyat
+            economy_col.update_one(
+                {"_id": varlik},
+                {"$set": {"current_price": varsayilan_fiyat}},
+                upsert=True
+            )
+        else:
+            fiyat = veri.get("current_price", varsayilan_fiyat)
+
         embed.add_field(
-            name=varlik["_id"],
-            value=f"Güncel Fiyatı: {varlik['current_price']:,} EwoCoin",
+            name=f"💎 {varlik}",
+            value=f"Fiyat: {formatla(fiyat)}",
             inline=False
         )
 
+    embed.set_thumbnail(url=bot.user.avatar.url)
     embed.set_footer(text="EwoBot Ekonomi Sistemi")
+
     await ctx.send(embed=embed)
 
 # ================== SATINAL KOMUTU ==================
 
-@bot.command()
-async def satin_al(ctx, *, urun):
+@bot.command(name="satınal")
+async def varlik_satinal(ctx, varlik: str, miktar: int):
+
+    if miktar <= 0:
+        return await ctx.send("❌ Miktar 1 veya daha büyük olmalı.")
+
+    varlik = varlik.capitalize()
+
+    if varlik not in varsayilan_varlikler:
+        return await ctx.send("❌ Geçersiz varlık adı.")
+
     user = get_user(ctx.author.id)
 
-    if urun not in MARKET_URUNLERI:
-        return await ctx.send("❌ Böyle bir ürün yok.")
+    veri = economy_col.find_one({"_id": varlik})
+    fiyat = veri["current_price"] if veri else varsayilan_varlikler[varlik]
 
-    fiyat = enflasyon_hesapla(MARKET_URUNLERI[urun]["fiyat"])
+    toplam_maliyet = fiyat * miktar
 
-    if user["para"] < fiyat:
-        return await ctx.send("❌ Paran yetmiyor.")
+    if user.get("para", 0) < toplam_maliyet:
+        return await ctx.send("❌ Yeterli paran yok.")
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {
             "$inc": {
-                "para": -fiyat,
-                f"envanter.{urun}": 1
+                "para": -toplam_maliyet,
+                f"yatirim.{varlik}": miktar
             }
         }
     )
 
-    await ctx.send(f"🛒 {urun} satın alındı!")
+    await ctx.send(
+        f"✅ {miktar} adet **{varlik}** satın aldın.\n💰 Toplam maliyet: {formatla(toplam_maliyet)}"
+    )
 
 # ================== SAT KOMUTU ==================
 
-@bot.command()
-@commands.cooldown(1, 4, commands.BucketType.user)
-async def sat(ctx, varlik: str, miktar: int):
+@bot.command(name="sat")
+async def varlik_sat(ctx, varlik: str, miktar: int):
 
     if miktar <= 0:
-        return await ctx.send("❌ Geçersiz miktar!")
+        return await ctx.send("❌ Miktar 1 veya daha büyük olmalı.")
 
     varlik = varlik.capitalize()
 
-    # Varlık kontrol
-    varlik_data = ekonomi_collection.find_one({"_id": varlik})
-    if not varlik_data:
-        return await ctx.send("❌ Geçersiz varlık!")
+    if varlik not in varsayilan_varlikler:
+        return await ctx.send("❌ Geçersiz varlık adı.")
 
-    fiyat = varlik_data.get("current_price", 0)
+    user = get_user(ctx.author.id)
+    sahip = user.get("yatirim", {}).get(varlik, 0)
+
+    if sahip < miktar:
+        return await ctx.send("❌ Yeterli varlığa sahip değilsin.")
+
+    veri = economy_col.find_one({"_id": varlik})
+    fiyat = veri["current_price"] if veri else varsayilan_varlikler[varlik]
+
     toplam_kazanc = fiyat * miktar
 
-    user_id = str(ctx.author.id)
-
-    # Kullanıcının yeterli varlığı var mı? (atomic kontrol)
-    sonuc = collection.update_one(
-        {
-            "_id": user_id,
-            f"yatirimlar.{varlik}": {"$gte": miktar}
-        },
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
         {
             "$inc": {
-                f"yatirimlar.{varlik}": -miktar,
-                "para": toplam_kazanc
+                "para": toplam_kazanc,
+                f"yatirim.{varlik}": -miktar
             }
         }
     )
 
-    if sonuc.modified_count == 0:
-        return await ctx.send("❌ Yeterli varlık yok!")
-
     await ctx.send(
-        f"💰 {miktar} adet **{varlik}** sattın!\n"
-        f"📈 Kazanç: **{formatla(toplam_kazanc)} EwoCoin**"
+        f"✅ {miktar} adet **{varlik}** sattın.\n💰 Kazanç: {formatla(toplam_kazanc)}"
     )
 
 # ------------------- Cooldown hata mesajı --------------------
@@ -1474,27 +1495,29 @@ class TicketPanelView(discord.ui.View):
     async def bug_bildiri(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(TicketModal("Bug Bildiri"))
 
-# =========================
-# 🔥 EWO ADMIN PANEL SİSTEMİ
-# =========================
-from discord.ui import Modal, TextInput
+# =====================================================
+# 🔥 EWO FULL ADMIN PANEL SYSTEM
+# =====================================================
+
 ADMIN_ID = 1271933410251772017
 BAKIM_KANAL_ID = 1474489287859769656
+EKONOMI_LOG_KANAL = 1474499591238848555
 
-bakim_modu = False
-kilitli_kanallar = set()
-
-# ================= ANA PANEL =================
+# =====================================================
+# ANA KOMUT
+# =====================================================
 
 @bot.command()
 async def adminpaneli(ctx):
     if ctx.author.id != ADMIN_ID:
-        return
+        return await ctx.send("❌ Bu komut sadece bota özeldir.")
+    await ctx.send(embed=admin_main_embed(), view=AdminMainView())
 
+
+def admin_main_embed():
     embed = discord.Embed(
         title="⚙️ EwoBot Admin Paneli",
         description=(
-            "Aşağıdaki kategorilerden birini seçerek admin işlemlerini gerçekleştirebilirsin.\n\n"
             "💰 Ekonomi & Para\n"
             "🔒 Kanal Kontrol\n"
             "🛠 Bakım Modu\n"
@@ -1502,209 +1525,119 @@ async def adminpaneli(ctx):
         ),
         color=discord.Color.dark_blue()
     )
+    embed.set_thumbnail(url=bot.user.avatar.url if bot.user.avatar else None)
+    return embed
 
-    embed.set_thumbnail(url=bot.user.avatar.url)
-    embed.set_footer(text="EwoBot Yönetim Paneli")
-
-    await ctx.send(embed=embed, view=AdminMainView())
-
-
-# ================= ANA MENÜ BUTONLARI =================
+# =====================================================
+# ANA VIEW
+# =====================================================
 
 class AdminMainView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(
-        label="💰 Ekonomi & Para",
-        style=discord.ButtonStyle.primary,
-        custom_id="admin_ekonomi"
-    )
+    @discord.ui.button(label="💰 Ekonomi & Para", style=discord.ButtonStyle.primary)
     async def ekonomi(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(
-            embed=ekonomi_embed(),
+            embed=discord.Embed(title="💰 Ekonomi Yönetimi", color=discord.Color.dark_blue()),
             view=EkonomiView()
         )
 
-    @discord.ui.button(
-        label="🔒 Kanal Kontrol",
-        style=discord.ButtonStyle.secondary,
-        custom_id="admin_kanal"
-    )
+    @discord.ui.button(label="🔒 Kanal Kontrol", style=discord.ButtonStyle.secondary)
     async def kanal(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(
-            embed=kanal_embed(),
+            embed=discord.Embed(title="🔒 Kanal Kontrol", color=discord.Color.dark_blue()),
             view=KanalView()
         )
 
-    @discord.ui.button(
-        label="🛠 Bakım Modu",
-        style=discord.ButtonStyle.danger,
-        custom_id="admin_bakim"
-    )
+    @discord.ui.button(label="🛠 Bakım Modu", style=discord.ButtonStyle.danger)
     async def bakim(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(
-            embed=bakim_embed(),
+            embed=discord.Embed(title="🛠 Bakım Modu", color=discord.Color.dark_blue()),
             view=BakimView()
         )
 
-    @discord.ui.button(
-        label="📢 Duyuru",
-        style=discord.ButtonStyle.success,
-        custom_id="admin_duyuru"
-    )
+    @discord.ui.button(label="📢 Duyuru Sistemi", style=discord.ButtonStyle.success)
     async def duyuru(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(
-            embed=duyuru_embed(),
+            embed=discord.Embed(title="📢 Duyuru Sistemi", color=discord.Color.dark_blue()),
             view=DuyuruView()
         )
 
+# =====================================================
+# EKONOMİ VIEW
+# =====================================================
 
-# ================= EMBEDLER =================
-
-def ekonomi_embed():
-    return discord.Embed(
-        title="💰 Ekonomi & Para Yönetimi",
-        description=(
-            "• ekonomisifirla\n"
-            "• ekonomideğiştir\n"
-            "• paraekle\n"
-            "• parasil\n"
-            "• faizyatır\n"
-            "• maaslarıyatır"
-        ),
-        color=discord.Color.green()
-    )
-
-def kanal_embed():
-    return discord.Embed(
-        title="🔒 Kanal Kontrol",
-        description="• kitle\n• kitleaç",
-        color=discord.Color.greyple()
-    )
-
-def bakim_embed():
-    return discord.Embed(
-        title="🛠 Bakım Modu",
-        description="Bakım başlat / bitir",
-        color=discord.Color.orange()
-    )
-
-def duyuru_embed():
-    return discord.Embed(
-        title="📢 Duyuru Sistemi",
-        description="Duyuru seçenekleri",
-        color=discord.Color.red()
-    )
-class EkonomiView(View):
+class EkonomiView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(
-        label="Ekonomiyi Gör",
-        custom_id="ekonomi_goster",
-        style=discord.ButtonStyle.green
-    )
-    async def ekonomi_goster(self, interaction: discord.Interaction, button: discord.ui.Button):
-
-        toplam_para = 0
-        toplam_banka = 0
-        kullanici_sayisi = 0
-
-        for user in collection.find():
-            toplam_para += user.get("para", 0)
-            toplam_banka += user.get("banka", 0)
-            kullanici_sayisi += 1
-
-        embed = discord.Embed(
-            title="🌍 Global Ekonomi",
-            color=discord.Color.gold()
-        )
-
-        embed.add_field(name="💰 Toplam Nakit", value=f"{formatla(toplam_para)}", inline=False)
-        embed.add_field(name="🏦 Toplam Banka", value=f"{formatla(toplam_banka)}", inline=False)
-        embed.add_field(name="👥 Kullanıcı Sayısı", value=f"{kullanici_sayisi}", inline=False)
-
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @discord.ui.button(
-        label="Faiz Yatır",
-        custom_id="ekonomi_faiz",
-        style=discord.ButtonStyle.primary
-    )
+    @discord.ui.button(label="Faiz Yatır (%5)", style=discord.ButtonStyle.primary)
     async def faiz(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         await interaction.response.defer(ephemeral=True)
+        dm_sayisi = 0
 
-        toplam_dagitilan = 0
-        users = collection.find({}, {"banka": 1})
-
-        for user in users:
+        for user in collection.find():
             banka = user.get("banka", 0)
             if banka <= 0:
                 continue
 
-            faiz_miktar = int(banka * 0.05)
-
-            collection.update_one(
-                {"_id": user["_id"]},
-                {"$inc": {"banka": faiz_miktar}}
-            )
-
-            toplam_dagitilan += faiz_miktar
-
-        await interaction.followup.send(
-            f"✅ Faiz yatırıldı.\nToplam dağıtılan: {formatla(toplam_dagitilan)}",
-            ephemeral=True
-        )
-
-    @discord.ui.button(label="Maaş Yatır", custom_id="ekonomi_maas", style=discord.ButtonStyle.primary)
-    async def maas(self, interaction: discord.Interaction, button: discord.ui.Button):
-
-        await interaction.response.defer(ephemeral=True)
-
-        dm_sayisi = 0
-        users = collection.find({}, {"meslek": 1, "banka": 1})
-
-        for user in users:
-
-            meslek = user.get("meslek", "İşsiz")
-
-            if meslek not in meslekler:
-                continue
-
-            maas_miktar = meslekler[meslek]["maas"]
-
-            collection.update_one(
-                {"_id": user["_id"]},
-                {"$inc": {"banka": maas_miktar}}
-            )
+            faiz = int(banka * 0.05)
+            collection.update_one({"_id": user["_id"]}, {"$inc": {"banka": faiz}})
 
             try:
                 user_obj = await bot.fetch_user(int(user["_id"]))
+                embed = discord.Embed(
+                    title="🏦 EwoBot Faiz Bilgilendirmesi",
+                    color=discord.Color.dark_blue()
+                )
+                embed.add_field(name="Bankadaki Paranız", value=formatla(banka), inline=False)
+                embed.add_field(name="Yatırılan Faiz", value=formatla(faiz), inline=False)
+                embed.set_thumbnail(url=bot.user.avatar.url)
+                embed.set_footer(text="EwoBot | Faiz Sistemi")
 
+                await user_obj.send(embed=embed)
+                dm_sayisi += 1
+            except:
+                pass
+
+        await interaction.followup.send(f"✅ Faiz yatırıldı.\n📨 DM: {dm_sayisi}", ephemeral=True)
+
+    @discord.ui.button(label="Maaş Yatır", style=discord.ButtonStyle.primary)
+    async def maas(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        await interaction.response.defer(ephemeral=True)
+        dm_sayisi = 0
+
+        for user in collection.find():
+            meslek = user.get("meslek", "İşsiz")
+            if meslek not in meslekler:
+                continue
+
+            maas = meslekler[meslek]["maas"]
+            collection.update_one({"_id": user["_id"]}, {"$inc": {"banka": maas}})
+
+            try:
+                user_obj = await bot.fetch_user(int(user["_id"]))
                 embed = discord.Embed(
                     title="💵 EwoBot Maaş Bilgilendirmesi",
                     color=discord.Color.dark_blue()
                 )
-
                 embed.add_field(name="Meslek", value=meslek, inline=False)
-                embed.add_field(name="Yatırılan Maaş", value=formatla(maas_miktar), inline=False)
+                embed.add_field(name="Yatırılan Maaş", value=formatla(maas), inline=False)
+                embed.set_thumbnail(url=bot.user.avatar.url)
+                embed.set_footer(text="EwoBot | Maaş Sistemi")
 
                 await user_obj.send(embed=embed)
                 dm_sayisi += 1
-                await asyncio.sleep(0.7)
-
             except:
                 pass
 
-        await interaction.followup.send(
-            f"✅ Maaşlar bankaya yatırıldı.\n📨 DM gönderilen kişi: {dm_sayisi}",
-            ephemeral=True
-        )
+        await interaction.followup.send(f"✅ Maaşlar yatırıldı.\n📨 DM: {dm_sayisi}", ephemeral=True)
 
-    @discord.ui.button(label="Ekonomi Sıfırla", custom_id="ekonomi_sifirla", style=discord.ButtonStyle.danger)
-    async def ekonomisifirla(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Ekonomi Sıfırla", style=discord.ButtonStyle.danger)
+    async def sifirla(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         for varlik, fiyat in varsayilan_varlikler.items():
             economy_col.update_one(
@@ -1713,198 +1646,59 @@ class EkonomiView(View):
                 upsert=True
             )
 
-        await interaction.response.send_message(
-            "💰 Ekonomi fiyatları varsayılana döndürüldü.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("💰 Ekonomi sıfırlandı.", ephemeral=True)
 
-    @discord.ui.button(label="Ekonomi Değiştir", custom_id="ekonomi_degistir", style=discord.ButtonStyle.primary)
-    async def ekonomidegistir(self, interaction: discord.Interaction, button: discord.ui.Button):
-
-        await interaction.response.defer(ephemeral=True)
-
-        mesaj_text = ""
-        dm_sayisi = 0
-
-        for varlik in varsayilan_varlikler.keys():
-
-            ekonomi = economy_col.find_one({"_id": varlik})
-
-            if not ekonomi:
-                eski = varsayilan_varlikler[varlik]
-            else:
-                eski = ekonomi["current_price"]
-
-            degisim = random.uniform(-0.15, 0.15)
-            yeni = int(eski * (1 + degisim))
-
-            economy_col.update_one(
-                {"_id": varlik},
-                {"$set": {"current_price": yeni}},
-                upsert=True
-            )
-
-            if yeni > eski:
-                emoji = "🟢"
-            elif yeni < eski:
-                emoji = "🔴"
-            else:
-                emoji = "⚪"
-
-            mesaj_text += f"{emoji} **{varlik}**\nEski: {formatla(eski)} → Yeni: {formatla(yeni)}\n\n"
-
-        embed = discord.Embed(
-            title="📊 EwoEkonomi Güncellendi!",
-            description=mesaj_text,
-            color=discord.Color.dark_blue()
-        )
-
-        embed.set_thumbnail(url=bot.user.avatar.url)
-        embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
-
-        log_kanal = bot.get_channel(1474499591238848555)
-        if log_kanal:
-            await log_kanal.send(embed=embed)
-
-        users = collection.find({}, {"_id": 1})
-
-        for user in users:
-            try:
-                user_obj = await bot.fetch_user(int(user["_id"]))
-                await user_obj.send(embed=embed)
-                dm_sayisi += 1
-                await asyncio.sleep(0.7)
-            except:
-                pass
-
-        await interaction.followup.send(
-            f"✅ Ekonomi başarıyla güncellendi.\n📨 DM gönderilen kişi: {dm_sayisi}",
-            ephemeral=True
-        )
-
-    @discord.ui.button(label="Geri", custom_id="ekonomi_geri", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Geri", style=discord.ButtonStyle.secondary)
     async def geri(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=admin_main_embed(), view=AdminMainView())
 
-        await interaction.response.edit_message(
-            embed=admin_main_embed(),
-            view=AdminMainView()
-        )
-
-# ================= MODALLAR =================
-
-class ParaEkleModal(discord.ui.Modal, title="Para Ekle"):
-    user_id = discord.ui.TextInput(label="Kullanıcı ID")
-    miktar = discord.ui.TextInput(label="Miktar")
-
-    async def on_submit(self, interaction):
-
-        collection.update_one(
-            {"_id": self.user_id.value},
-            {"$inc": {"para": int(self.miktar.value)}},
-            upsert=True
-        )
-
-        await interaction.response.send_message(
-            "✅ Para eklendi.",
-            ephemeral=True
-        )
-
-
-class ParaSilModal(discord.ui.Modal, title="Para Sil"):
-    user_id = discord.ui.TextInput(label="Kullanıcı ID")
-    miktar = discord.ui.TextInput(label="Miktar")
-
-    async def on_submit(self, interaction):
-
-        user = collection.find_one({"_id": self.user_id.value})
-
-        if not user:
-            return await interaction.response.send_message(
-                "❌ Kullanıcı bulunamadı.",
-                ephemeral=True
-            )
-
-        yeni_para = max(user.get("para", 0) - int(self.miktar.value), 0)
-
-        collection.update_one(
-            {"_id": self.user_id.value},
-            {"$set": {"para": yeni_para}}
-        )
-
-        await interaction.response.send_message(
-            "✅ Para silindi.",
-            ephemeral=True
-        )
-
-
-# ================= KANAL VIEW =================
+# =====================================================
+# KANAL VIEW
+# =====================================================
 
 class KanalView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(
-    label="Kitle",
-    style=discord.ButtonStyle.danger,
-    custom_id="kanal_kitle"
-)
-    async def kitle(self, interaction, button):
-        await interaction.response.send_modal(KitleModal())
-
-    @discord.ui.button(
-    label="Kitle Aç",
-    style=discord.ButtonStyle.success,
-    custom_id="kanal_kitleac"
-)
-    async def kitleac(self, interaction, button):
-        await interaction.response.send_modal(KitleAcModal())
-
-    @discord.ui.button(
-    label="Geri",
-    style=discord.ButtonStyle.secondary,
-    custom_id="kanal_geri"
-)
-    async def geri(self, interaction, button):
-        await interaction.response.edit_message(embed=admin_main_embed(), view=AdminMainView())
-
-
-class KitleModal(discord.ui.Modal, title="Kanal Kilitle"):
-    kanal_id = discord.ui.TextInput(label="Kanal ID")
-
-    async def on_submit(self, interaction):
-        kilitli_kanallar.add(int(self.kanal_id.value))
+    @discord.ui.button(label="Kitle", style=discord.ButtonStyle.danger)
+    async def kitle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.channel.set_permissions(
+            interaction.guild.default_role,
+            send_messages=False
+        )
         await interaction.response.send_message("🔒 Kanal kilitlendi.", ephemeral=True)
 
-
-class KitleAcModal(discord.ui.Modal, title="Kanal Kilit Aç"):
-    kanal_id = discord.ui.TextInput(label="Kanal ID")
-
-    async def on_submit(self, interaction):
-        kilitli_kanallar.discard(int(self.kanal_id.value))
+    @discord.ui.button(label="Kitle Aç", style=discord.ButtonStyle.success)
+    async def ac(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.channel.set_permissions(
+            interaction.guild.default_role,
+            send_messages=True
+        )
         await interaction.response.send_message("🔓 Kanal açıldı.", ephemeral=True)
 
+    @discord.ui.button(label="Geri", style=discord.ButtonStyle.secondary)
+    async def geri(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=admin_main_embed(), view=AdminMainView())
 
-# ================= BAKIM KONTROL =================
+# =====================================================
+# BAKIM SİSTEMİ
+# =====================================================
 
 @bot.check
 async def global_bakim_kontrol(ctx):
-    if bakim_aktif_mi() and ctx.author.id != ADMIN_ID:
-        await ctx.send("🚧 Bot bakım modunda.")
+    ayar = settings_col.find_one({"_id": "global"})
+    bakim = ayar.get("bakim_modu", False) if ayar else False
+    if bakim and ctx.author.id != ADMIN_ID:
         return False
     return True
 
-# ================= BAKIM VIEW =================
 
 class BakimView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(
-        label="Bakım Başlat",
-        style=discord.ButtonStyle.danger,
-        custom_id="bakim_baslat"
-    )
-    async def baslat(self, interaction, button):
+    @discord.ui.button(label="Bakım Başlat", style=discord.ButtonStyle.danger)
+    async def baslat(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         settings_col.update_one(
             {"_id": "global"},
@@ -1913,17 +1707,22 @@ class BakimView(discord.ui.View):
         )
 
         kanal = bot.get_channel(BAKIM_KANAL_ID)
+
+        embed = discord.Embed(
+            title="🛠 EwoBot Bakım Modu",
+            description="@everyone\nBot bakım moduna alınmıştır.\nKomutlar geçici olarak devre dışıdır.",
+            color=discord.Color.dark_blue()
+        )
+        embed.set_thumbnail(url=bot.user.avatar.url)
+        embed.set_footer(text="EwoBot Sistem Bildirimi")
+
         if kanal:
-            await kanal.send("@everyone 🛠 EwoBot bakıma alınmıştır.")
+            await kanal.send(embed=embed)
 
         await interaction.response.send_message("✅ Bakım başlatıldı.", ephemeral=True)
 
-    @discord.ui.button(
-        label="Bakım Bitir",
-        style=discord.ButtonStyle.success,
-        custom_id="bakim_bitir"
-    )
-    async def bitir(self, interaction, button):
+    @discord.ui.button(label="Bakım Bitir", style=discord.ButtonStyle.success)
+    async def bitir(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         settings_col.update_one(
             {"_id": "global"},
@@ -1932,163 +1731,23 @@ class BakimView(discord.ui.View):
         )
 
         kanal = bot.get_channel(BAKIM_KANAL_ID)
-        if kanal:
-            await kanal.send("@everyone ✅ EwoBot bakımdan çıktı.")
 
-        await interaction.response.send_message("✅ Bakım kapatıldı.", ephemeral=True)
-
-    @discord.ui.button(
-        label="Geri",
-        style=discord.ButtonStyle.secondary,
-        custom_id="bakim_geri"
-    )
-    async def geri(self, interaction, button):
-        await interaction.response.edit_message(
-            embed=admin_main_embed(),
-            view=AdminMainView()
-        )
-
-
-# ================= DUYURU VIEW =================
-
-class DuyuruView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(
-    label="Önemli Duyuru",
-    style=discord.ButtonStyle.danger,
-    custom_id="duyuru_onemli"
-)
-    async def onemli(self, interaction, button):
-        await interaction.response.send_modal(OnemliDuyuruModal())
-
-    @discord.ui.button(
-    label="Embed Duyuru",
-    style=discord.ButtonStyle.primary,
-    custom_id="duyuru_embed"
-)
-    async def embed(self, interaction, button):
-        await interaction.response.send_modal(EmbedDuyuruModal())
-
-    @discord.ui.button(
-
-    label="Düz Duyuru",
-    style=discord.ButtonStyle.secondary,
-    custom_id="duyuru_duz"
-)
-    async def duz(self, interaction, button):
-        await interaction.response.send_modal(DuzDuyuruModal())
-
-    @discord.ui.button(
-    label="Geri",
-    style=discord.ButtonStyle.secondary,
-    custom_id="duyuru_geri"
-)
-    async def geri(self, interaction, button):
-        await interaction.response.edit_message(embed=admin_main_embed(), view=AdminMainView())
-
-
-class OnemliDuyuruModal(Modal, title="📢 Önemli Duyuru Gönder"):
-
-    mesaj = TextInput(
-        label="Duyuru Mesajı",
-        style=discord.TextStyle.paragraph,
-        placeholder="Gönderilecek önemli duyuruyu yaz...",
-        required=True,
-        max_length=2000
-    )
-
-    gorsel = TextInput(
-        label="Görsel URL (isteğe bağlı)",
-        style=discord.TextStyle.short,
-        placeholder="https://...",
-        required=False
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-
-        await interaction.response.defer(ephemeral=True)
-
-        gonderilen_kullanicilar = set()
-        basarili = 0
-        hatali = 0
-
-        for guild in bot.guilds:
-            for member in guild.members:
-
-                if member.bot:
-                    continue
-
-                # Aynı kullanıcıya tekrar atmayı engelle
-                if member.id in gonderilen_kullanicilar:
-                    continue
-
-                embed = discord.Embed(
-                    title="🚨 EwoBot Önemli Duyuru",
-                    description=f"{self.mesaj.value}",
-                    color=discord.Color.dark_blue()
-                )
-
-                embed.set_footer(
-                    text="EwoBot Yönetimi | Önemli Bildirim",
-                    icon_url=bot.user.avatar.url if bot.user.avatar else None
-                )
-
-                embed.set_thumbnail(url=bot.user.avatar.url)
-
-                if self.gorsel.value:
-                    embed.set_image(url=self.gorsel.value)
-
-                try:
-                    await member.send(embed=embed)
-                    gonderilen_kullanicilar.add(member.id)
-                    basarili += 1
-                except:
-                    hatali += 1
-
-        await interaction.followup.send(
-            f"✅ Duyuru gönderildi!\n📨 Başarılı: {basarili}\n❌ Hatalı: {hatali}",
-            ephemeral=True
-        )
-
-
-class EmbedDuyuruModal(discord.ui.Modal, title="Embed Duyuru"):
-    kanal_id = discord.ui.TextInput(label="Kanal ID")
-    mesaj = discord.ui.TextInput(label="Mesaj", style=discord.TextStyle.paragraph)
-
-    async def on_submit(self, interaction):
-        kanal = bot.get_channel(int(self.kanal_id.value))
         embed = discord.Embed(
-            title="📢 EwoBot Resmi Duyuru",
-            description=self.mesaj.value,
+            title="✅ EwoBot Bakım Tamamlandı",
+            description="@everyone\nBakım modu kapatıldı.\nArtık herkes komutları kullanabilir.",
             color=discord.Color.dark_blue()
         )
         embed.set_thumbnail(url=bot.user.avatar.url)
+        embed.set_footer(text="EwoBot Sistem Bildirimi")
+
         if kanal:
             await kanal.send(embed=embed)
-        await interaction.response.send_message("✅ Embed duyuru gönderildi.", ephemeral=True)
 
+        await interaction.response.send_message("✅ Bakım kapatıldı.", ephemeral=True)
 
-class DuzDuyuruModal(discord.ui.Modal, title="Düz Duyuru"):
-    kanal_id = discord.ui.TextInput(label="Kanal ID")
-    mesaj = discord.ui.TextInput(label="Mesaj", style=discord.TextStyle.paragraph)
-
-    async def on_submit(self, interaction):
-        kanal = bot.get_channel(int(self.kanal_id.value))
-        if kanal:
-            await kanal.send(self.mesaj.value)
-        await interaction.response.send_message("✅ Düz duyuru gönderildi.", ephemeral=True)
-
-
-def admin_main_embed():
-    embed = discord.Embed(
-        title="⚙️ EwoBot Admin Paneli",
-        description="Kategori seçiniz.",
-        color=discord.Color.dark_blue()
-    )
-    embed.set_thumbnail(url=bot.user.avatar.url)
-    return embed
+    @discord.ui.button(label="Geri", style=discord.ButtonStyle.secondary)
+    async def geri(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=admin_main_embed(), view=AdminMainView())
 
 # ------------------- MARKET ANA KOMUT -------------------
 
