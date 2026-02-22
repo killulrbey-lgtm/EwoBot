@@ -868,10 +868,12 @@ async def help(ctx):
 @bot.command()
 async def gzenginler(ctx):
 
-    top_users = economy_col.find().sort("yatirimlar.ewopluscoin", -1).limit(10)
+    # Kullanıcı collection’dan çekiyoruz
+    top_users = collection.find().sort("yatirimlar.ewopluscoin", -1).limit(10)
 
     embed = discord.Embed(
         title="🌍 Global EwoPlusCoin Zenginleri",
+        description="En çok EwoPlusCoin'e sahip 10 kişi",
         color=discord.Color.gold()
     )
 
@@ -887,7 +889,7 @@ async def gzenginler(ctx):
             uye = await bot.fetch_user(int(user["_id"]))
             embed.add_field(
                 name=f"{sira}. {uye.name}",
-                value=f"💎 {miktar} EwoPlusCoin",
+                value=f"💎 {formatla(miktar)} EwoPlusCoin",
                 inline=False
             )
             sira += 1
@@ -910,7 +912,7 @@ async def otomatik_gzenginler():
     if not kanal:
         return
 
-    top_users = economy_col.find().sort("yatirimlar.ewopluscoin", -1).limit(10)
+    top_users = collection.find().sort("yatirimlar.ewopluscoin", -1).limit(10)
 
     embed = discord.Embed(
         title="🌍 Global EwoPlusCoin Zenginleri",
@@ -930,7 +932,7 @@ async def otomatik_gzenginler():
             uye = await bot.fetch_user(int(user["_id"]))
             embed.add_field(
                 name=f"{sira}. {uye.name}",
-                value=f"💎 {miktar} EwoPlusCoin",
+                value=f"💎 {formatla(miktar)} EwoPlusCoin",
                 inline=False
             )
             sira += 1
