@@ -60,11 +60,8 @@ intents.message_content = True
 def get_prefix(bot, message):
     prefixes = [
         "q!",
-        "Q!",
         "q",
-        "Q",
         "ewo ",
-        "Ewo ",
         "!"
     ]
     return commands.when_mentioned_or(*prefixes)(bot, message)
@@ -72,7 +69,8 @@ def get_prefix(bot, message):
 bot = commands.Bot(
     command_prefix=get_prefix,
     case_insensitive=True,
-    intents=intents
+    intents=intents,
+    help_command=None        # 🔥 Default help kapalı
 )
 
 # ================= TEST KOMUT =================
@@ -860,7 +858,6 @@ async def on_member_remove(member):
 async def help(ctx):
     await ctx.send("❌ Yanlış Komut! Lütfen `q!yardım` yazınız.")
 
-# ------------------- q!gzenginler & q!szenginler -------------------
 # =====================================================
 # 🌍 GLOBAL EwoPlusCoin ZENGİNLER
 # =====================================================
