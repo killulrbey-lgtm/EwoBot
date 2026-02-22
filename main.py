@@ -2097,7 +2097,6 @@ async def on_ready():
 
     # View'leri ekle (kalıcı butonlar için)
     bot.add_view(TicketPanelView())
-    bot.add_view(AdminMainView())
     bot.add_view(EkonomiView())
     bot.add_view(KanalView())
     bot.add_view(BakimView())
