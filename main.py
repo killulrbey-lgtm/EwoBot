@@ -1522,7 +1522,11 @@ class EkonomiView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Ekonomiyi Gör", style=discord.ButtonStyle.green)
+    @discord.ui.button(
+        label="Ekonomiyi Gör",
+        custom_id="ekonomi_goster",
+        style=discord.ButtonStyle.green
+    )
     async def ekonomi_goster(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         toplam_para = 0
@@ -1545,7 +1549,11 @@ class EkonomiView(View):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="Faiz Yatır", style=discord.ButtonStyle.primary)
+    @discord.ui.button(
+        label="Faiz Yatır",
+        custom_id="ekonomi_faiz",
+        style=discord.ButtonStyle.primary
+    )
     async def faiz(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         await interaction.response.defer(ephemeral=True)
