@@ -868,8 +868,9 @@ async def help(ctx):
 @bot.command()
 async def gzenginler(ctx):
 
-    # Kullanıcı collection’dan çekiyoruz
-    top_users = collection.find().sort("yatirimlar.ewopluscoin", -1).limit(10)
+    top_users = collection.find(
+        {"yatirimlar.ewopluscoin": {"$gt": 0}}
+    ).sort("yatirimlar.ewopluscoin", -1).limit(10)
 
     embed = discord.Embed(
         title="🌍 Global EwoPlusCoin Zenginleri",
@@ -881,9 +882,6 @@ async def gzenginler(ctx):
 
     for user in top_users:
         miktar = user.get("yatirimlar", {}).get("ewopluscoin", 0)
-
-        if miktar <= 0:
-            continue
 
         try:
             uye = await bot.fetch_user(int(user["_id"]))
@@ -908,11 +906,17 @@ async def gzenginler(ctx):
 @tasks.loop(minutes=10)
 async def otomatik_gzenginler():
 
-    kanal = bot.get_channel(1474500301758267565)
+    kanal_id = 1474500301758267565
+    kanal = bot.get_channel(kanal_id)
+
     if not kanal:
+        print("Global zenginler kanalı bulunamadı.")
         return
 
-    top_users = collection.find().sort("yatirimlar.ewopluscoin", -1).limit(10)
+    # Sadece ewopluscoin > 0 olanlar
+    top_users = collection.find(
+        {"yatirimlar.ewopluscoin": {"$gt": 0}}
+    ).sort("yatirimlar.ewopluscoin", -1).limit(10)
 
     embed = discord.Embed(
         title="🌍 Global EwoPlusCoin Zenginleri",
@@ -925,9 +929,6 @@ async def otomatik_gzenginler():
     for user in top_users:
         miktar = user.get("yatirimlar", {}).get("ewopluscoin", 0)
 
-        if miktar <= 0:
-            continue
-
         try:
             uye = await bot.fetch_user(int(user["_id"]))
             embed.add_field(
@@ -939,9 +940,24 @@ async def otomatik_gzenginler():
         except:
             continue
 
+    if sira == 1:
+        embed.description = "Henüz EwoPlusCoin sahibi kimse yok."
+
     embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
 
-    await kanal.send(embed=embed)
+    # 🔥 MESAJ GÜNCELLEME SİSTEMİ
+    try:
+        # Son 10 mesajı kontrol et
+        async for msg in kanal.history(limit=10):
+            if msg.author == bot.user:
+                await msg.edit(embed=embed)
+                return
+
+        # Eğer bot mesajı yoksa yeni at
+        await kanal.send(embed=embed)
+
+    except Exception as e:
+        print("Global zenginler mesaj güncellenemedi:", e)
 
 @bot.command()
 async def szenginler(ctx):
