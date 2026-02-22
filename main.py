@@ -23,6 +23,14 @@ collection = db["users"]
 ekonomi_collection = db["ekonomi"]
 settings_collection = db["settings"]
 
+# fonksyon bakim modu
+
+def bakim_aktif_mi():
+    data = settings_collection.find_one({"_id": "bakim_modu"})
+    if not data:
+        return False
+    return data.get("aktif", False)
+
 # ================= BOT =================
 
 intents = discord.Intents.default()
