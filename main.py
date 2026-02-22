@@ -1523,7 +1523,7 @@ class EkonomiView(View):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="Ekonomiyi Gör", style=discord.ButtonStyle.green)
-    async def ekonomi_goster(self, interaction: discord.Interaction, button: Button):
+    async def ekonomi_goster(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         toplam_para = 0
         toplam_banka = 0
@@ -1545,109 +1545,92 @@ class EkonomiView(View):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    # ================= FAİZ YATIR =================
-@discord.ui.button(
-    label="Faiz Yatır",
-    style=discord.ButtonStyle.primary
-)
-async def faiz(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Faiz Yatır", style=discord.ButtonStyle.primary)
+    async def faiz(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-    await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
 
-    toplam_dagitilan = 0
+        toplam_dagitilan = 0
+        users = collection.find({}, {"banka": 1})
 
-    users = collection.find({}, {"banka": 1})
+        for user in users:
+            banka = user.get("banka", 0)
+            if banka <= 0:
+                continue
 
-    for user in users:
-        banka = user.get("banka", 0)
-        if banka <= 0:
-            continue
+            faiz = int(banka * 0.05)
 
-        faiz = int(banka * 0.05)
-
-        collection.update_one(
-            {"_id": user["_id"]},
-            {"$inc": {"banka": faiz}}
-        )
-
-        toplam_dagitilan += faiz
-
-    await interaction.followup.send(
-        f"✅ Faiz yatırıldı.\nToplam dağıtılan: {formatla(toplam_dagitilan)}",
-        ephemeral=True
-    )
-
-    # ================= MAAŞ YATIR =================
-@discord.ui.button(
-    label="Maaş Yatır",
-    custom_id="ekonomi_maas",
-    style=discord.ButtonStyle.primary
-)
-async def maas(self, interaction: discord.Interaction, button: discord.ui.Button):
-
-    await interaction.response.defer(ephemeral=True)
-
-    dm_sayisi = 0
-
-    users = collection.find({}, {"meslek": 1, "banka": 1})
-
-    for user in users:
-
-        meslek = user.get("meslek", "İşsiz")
-
-        if meslek not in meslekler:
-            continue
-
-        maas_miktar = meslekler[meslek]["maas"]
-
-        collection.update_one(
-            {"_id": user["_id"]},
-            {"$inc": {"banka": maas_miktar}}
-        )
-
-        try:
-            user_obj = await bot.fetch_user(int(user["_id"]))
-
-            embed = discord.Embed(
-                title="💵 EwoBot Maaş Bilgilendirmesi",
-                color=discord.Color.dark_blue()
+            collection.update_one(
+                {"_id": user["_id"]},
+                {"$inc": {"banka": faiz}}
             )
-            embed.set_thumbnail(url=bot.user.avatar.url)
-            embed.add_field(name="Meslek", value=meslek, inline=False)
-            embed.add_field(name="Yatırılan Maaş", value=formatla(maas_miktar), inline=False)
-            embed.set_footer(text="EwoBot | Maaş Sistemi")
 
-            await user_obj.send(embed=embed)
-            dm_sayisi += 1
-            await asyncio.sleep(0.7)
+            toplam_dagitilan += faiz
 
-        except:
-            pass
-
-    await interaction.followup.send(
-        f"✅ Maaşlar bankaya yatırıldı.\n📨 DM gönderilen kişi: {dm_sayisi}",
-        ephemeral=True
-    )
-
-    # ================= EKONOMİ SIFIRLA =================
-    @discord.ui.button(
-    label="Ekonomi Sıfırla",
-    custom_id="ekonomi_sifirla",
-    style=discord.ButtonStyle.danger
-)
-async def ekonomisifirla(self, interaction: discord.Interaction, button: discord.ui.Button):
-
-    for varlik, fiyat in varsayilan_varlikler.items():
-        economy_col.update_one(
-            {"_id": varlik},
-            {"$set": {"current_price": fiyat}},
-            upsert=True
+        await interaction.followup.send(
+            f"✅ Faiz yatırıldı.\nToplam dağıtılan: {formatla(toplam_dagitilan)}",
+            ephemeral=True
         )
 
-    await interaction.response.send_message(
-        "💰 Ekonomi fiyatları varsayılana döndürüldü.",
-        ephemeral=True
-    )
+    @discord.ui.button(label="Maaş Yatır", custom_id="ekonomi_maas", style=discord.ButtonStyle.primary)
+    async def maas(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        await interaction.response.defer(ephemeral=True)
+
+        dm_sayisi = 0
+        users = collection.find({}, {"meslek": 1, "banka": 1})
+
+        for user in users:
+
+            meslek = user.get("meslek", "İşsiz")
+
+            if meslek not in meslekler:
+                continue
+
+            maas_miktar = meslekler[meslek]["maas"]
+
+            collection.update_one(
+                {"_id": user["_id"]},
+                {"$inc": {"banka": maas_miktar}}
+            )
+
+            try:
+                user_obj = await bot.fetch_user(int(user["_id"]))
+
+                embed = discord.Embed(
+                    title="💵 EwoBot Maaş Bilgilendirmesi",
+                    color=discord.Color.dark_blue()
+                )
+
+                embed.add_field(name="Meslek", value=meslek, inline=False)
+                embed.add_field(name="Yatırılan Maaş", value=formatla(maas_miktar), inline=False)
+
+                await user_obj.send(embed=embed)
+                dm_sayisi += 1
+                await asyncio.sleep(0.7)
+
+            except:
+                pass
+
+        await interaction.followup.send(
+            f"✅ Maaşlar bankaya yatırıldı.\n📨 DM gönderilen kişi: {dm_sayisi}",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="Ekonomi Sıfırla", custom_id="ekonomi_sifirla", style=discord.ButtonStyle.danger)
+    async def ekonomisifirla(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        for varlik, fiyat in varsayilan_varlikler.items():
+            ekonomi_collection.update_one(
+                {"_id": varlik},
+                {"$set": {"current_price": fiyat}},
+                upsert=True
+            )
+
+        await interaction.response.send_message(
+            "💰 Ekonomi fiyatları varsayılana döndürüldü.",
+            ephemeral=True
+        )
 
     # ================= EKONOMİ DEĞİŞTİR =================
  @discord.ui.button(
