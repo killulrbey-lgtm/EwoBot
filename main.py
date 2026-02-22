@@ -174,8 +174,29 @@ MARKET_URUNLERI = {
 
 @bot.command()
 async def param(ctx):
-    user = get_user(ctx.author.id)
-    await ctx.send(f"💰 {ctx.author.mention}, Paran {formatla(user['para'])} EwoCoin")
+    user_id = str(ctx.author.id)
+
+    user = collection.find_one({"_id": user_id})
+
+    if not user:
+        user = {
+            "_id": user_id,
+            "para": 1000,
+            "banka": 0,
+            "yatirimlar": {},
+            "envanter": {},
+            "kullanildi": True
+        }
+        collection.insert_one(user)
+    else:
+        collection.update_one(
+            {"_id": user_id},
+            {"$set": {"kullanildi": True}}
+        )
+
+    await ctx.send(
+        f"💰 {ctx.author.mention}, Paran: **{formatla(user['para'])} EwoCoin**"
+    )
 
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
@@ -252,17 +273,27 @@ async def cf(ctx, miktar: str):
 
 @bot.command()
 @commands.cooldown(1, 15, commands.BucketType.user)
-async def slot(ctx, miktar: int):
+async def slot(ctx, miktar):
+
+    user = get_user(ctx.author.id)
+
+    if miktar.lower() == "all":
+        miktar = user["para"]
+    else:
+        try:
+            miktar = int(miktar)
+        except:
+            return await ctx.send("❌ Geçerli miktar gir!")
 
     if miktar <= 0:
         return await ctx.send("❌ Geçerli miktar gir!")
 
-    user = get_user(ctx.author.id)
+    if miktar > 100000:
+        return await ctx.send("❌ Slotta maksimum 100.000 oynayabilirsin!")
 
     if user["para"] < miktar:
         return await ctx.send("❌ Paran yetmiyor.")
 
-    # Bahis düş
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": -miktar}}
@@ -618,8 +649,6 @@ async def satin_al(ctx, *, urun):
 
     await ctx.send(f"🛒 {urun} satın alındı!")
 
-# ================== SAT KOMUDU ==================
-
 # ================== SAT KOMUTU ==================
 
 @bot.command()
@@ -731,7 +760,8 @@ async def help(ctx):
 # ------------------- q!gzenginler & q!szenginler -------------------
 @bot.command()
 async def gzenginler(ctx):
-    top_users = collection.find().sort(
+
+    top_users = collection.find({"kullanildi": True}).sort(
         [("para", -1), ("banka", -1)]
     ).limit(10)
 
@@ -740,9 +770,16 @@ async def gzenginler(ctx):
     sıra = 1
     for user in top_users:
         toplam = user.get("para", 0) + user.get("banka", 0)
+
+        try:
+            user_obj = await bot.fetch_user(int(user["_id"]))
+            isim = user_obj.name
+        except:
+            isim = "Bilinmeyen"
+
         embed.add_field(
-            name=f"#{sıra}",
-            value=f"{toplam} EwoCoin",
+            name=f"#{sıra} - {isim}",
+            value=f"{formatla(toplam)} EwoCoin",
             inline=False
         )
         sıra += 1
@@ -754,7 +791,7 @@ async def global_zenginler_gonder():
 
     kanal = await bot.fetch_channel(1474500301758267565)
 
-    users = collection.find({}, {"para": 1, "banka": 1})
+    users = collection.find({"kullanildi": True}, {"para": 1, "banka": 1})
 
     sirali = sorted(
         [(u["_id"], u.get("para", 0) + u.get("banka", 0)) for u in users],
@@ -764,9 +801,11 @@ async def global_zenginler_gonder():
 
     text = ""
     for i, (uid, bakiye) in enumerate(sirali, 1):
-        user = bot.get_user(int(uid))
-        if user:
-            text += f"{i}. {user.name} - {bakiye:,}\n"
+        try:
+            user = await bot.fetch_user(int(uid))
+            text += f"{i}. {user.name} - {formatla(bakiye)}\n"
+        except:
+            pass
 
     embed = discord.Embed(
         title="💰 Global En Zenginler",
@@ -778,27 +817,40 @@ async def global_zenginler_gonder():
 
 @bot.command()
 async def szenginler(ctx):
-    # Sunucudaki en zengin 10 kişi
+
     toplam_para = []
+
     for member in ctx.guild.members:
-        info = get_user(member.id)
-        toplam_para.append((member.name, info["para"] + info["banka"]))
+        info = collection.find_one({"_id": str(member.id)})
+        if not info:
+            continue
+
+        toplam = info.get("para", 0) + info.get("banka", 0)
+        toplam_para.append((member.name, toplam))
+
     sirali = sorted(toplam_para, key=lambda x: x[1], reverse=True)[:10]
 
     text = ""
     for i, (name, bakiye) in enumerate(sirali, 1):
-        text += f"{i}. {name} - {bakiye:,} EwoCoin\n"
+        text += f"{i}. {name} - {formatla(bakiye)} EwoCoin\n"
 
-    await ctx.send(embed=discord.Embed(title=f"💰 {ctx.guild.name} En Zenginler", description=text, color=discord.Color.gold()))
+    embed = discord.Embed(
+        title=f"💰 {ctx.guild.name} En Zenginler",
+        description=text or "Veri yok",
+        color=discord.Color.gold()
+    )
+
+    await ctx.send(embed=embed)
 
 # ------------------- q!enflasyon -------------------
 @bot.command()
 async def enflasyon(ctx):
+
     oran = enflasyon_orani()
     toplam = global_toplam_para()
 
     embed = discord.Embed(title="📈 Ekonomi Durumu", color=discord.Color.orange())
-    embed.add_field(name="Toplam Para", value=f"{toplam} EwoCoin", inline=False)
+    embed.add_field(name="Toplam Para", value=f"{formatla(toplam)} EwoCoin", inline=False)
     embed.add_field(name="Enflasyon Oranı", value=f"{round(oran,2)}x", inline=False)
 
     await ctx.send(embed=embed)
