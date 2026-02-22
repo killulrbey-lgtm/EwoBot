@@ -1,57 +1,29 @@
+# ================= IMPORTS =================
 import discord
 from discord.ext import commands, tasks
-import json
 import random
 import asyncio
-import datetime
 import os
-
-# ================= FLASK KEEP ALIVE =================
-
+from pymongo import MongoClient, ReturnDocument
 from flask import Flask
 from threading import Thread
 
-app = Flask(__name__)
+# ================= MONGO =================
 
-@app.route("/")
-def home():
-    return "Bot aktif!"
+MONGO_URI = os.getenv("MONGO_URI")
 
-def run():
-    app.run(host="0.0.0.0", port=10000)
+if not MONGO_URI:
+    raise Exception("MONGO_URI bulunamadı!")
 
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
+client = MongoClient(MONGO_URI)
 
-# ================= DISCORD BOT =================
+db = client["EwoBotDB"]
 
-intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
+collection = db["users"]
+ekonomi_collection = db["ekonomi"]
+settings_collection = db["settings"]
 
-bot = commands.Bot(
-    command_prefix="q!",
-    intents=intents,
-    help_command=None
-)
-
-# ================= BOT READY =================
-
-@bot.event
-async def on_ready():
-    print(f"{bot.user} aktif!")
-
-def run():
-    app.run(host="0.0.0.0", port=10000)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-keep_alive()
-
-# ================= DISCORD BOT =================
+# ================= BOT =================
 
 intents = discord.Intents.default()
 intents.members = True
@@ -62,28 +34,6 @@ bot = commands.Bot(
     intents=intents,
     help_command=None
 )
-
-# ================= BOT READY =================
-
-@bot.event
-async def on_ready():
-    print(f"{bot.user} aktif!")
-
-    # Task'ler burada başlatılır
-    try:
-        durum_degistir.start()
-    except:
-        pass
-
-    try:
-        global_zenginler_gonder.start()
-    except:
-        pass
-
-    try:
-        enflasyon_gonder.start()
-    except:
-        pass
 
 # ================= TEST KOMUT =================
 
@@ -91,19 +41,13 @@ async def on_ready():
 async def ping(ctx):
     await ctx.send("Pong!")
 
-# ================= DATA =================
-def load_data():
-    try:
-        with open("data.json", "r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-def save_data(data):
-    with open("data.json", "w") as f:
-        json.dump(data, f, indent=4)
-
-data = load_data()   # ✅ fonksiyon tanımlandıktan sonra çağırıyoruz
+@bot.command()
+async def mongotest(ctx):
+    uri = os.getenv("MONGO_URI")
+    if uri:
+        await ctx.send("✅ MONGO_URI mevcut")
+    else:
+        await ctx.send("❌ MONGO_URI YOK")
 
 def formatla(sayi):
     return f"{int(sayi):,}".replace(",", ".")
@@ -117,75 +61,58 @@ varsayilan_varlikler = {
     "Gümüş": 35000
 }
 
+from pymongo import ReturnDocument
+
 def get_user(user_id):
     user_id = str(user_id)
 
-    if user_id not in data:
-        data[user_id] = {
-            "para": 1000,
-            "banka": 0,
-            "meslek": "İşsiz",
-            "envanter": {
-                "Bronz Kasa": 0,
-                "Gümüş Kasa": 0,
-                "Altın Kasa": 0,
-                "Elmas Kasa": 0,
-                "Premium Kasa": 0,
-                "EwoPlus Kasa": 0,
-                "Silah": 0,
-                "Özel Koruma": 0,
-                "Olta": 0
-            },
-            "yatirimlar": {
-                "Altın": 0,
-                "EwoPlusCoin": 0,
-                "Bitcoin": 0,
-                "Elmas": 0,
-                "Dolar": 0,
-                "Gümüş": 0
+    return collection.find_one_and_update(
+        {"_id": user_id},
+        {
+            "$setOnInsert": {
+                "para": 1000,
+                "banka": 0,
+                "meslek": "İşsiz",
+                "envanter": {
+                    "Bronz Kasa": 0,
+                    "Gümüş Kasa": 0,
+                    "Altın Kasa": 0,
+                    "Elmas Kasa": 0,
+                    "Premium Kasa": 0,
+                    "EwoPlus Kasa": 0,
+                    "Silah": 0,
+                    "Özel Koruma": 0,
+                    "Olta": 0
+                },
+                "yatirimlar": {
+                    "Altın": 0,
+                    "EwoPlusCoin": 0,
+                    "Bitcoin": 0,
+                    "Elmas": 0,
+                    "Dolar": 0,
+                    "Gümüş": 0
+                }
             }
-        }
-        save_data(data)
-
-    else:
-        # Eğer envanter yoksa ekle
-        if "envanter" not in data[user_id]:
-            data[user_id]["envanter"] = {
-                "Bronz Kasa": 0,
-                "Gümüş Kasa": 0,
-                "Altın Kasa": 0,
-                "Elmas Kasa": 0,
-                "Premium Kasa": 0,
-                "EwoPlus Kasa": 0,
-                "Silah": 0,
-                "Özel Koruma": 0,
-                "Olta": 0
-            }
-
-        # Yatırımlar kontrolü
-        if "yatirimlar" not in data[user_id]:
-            data[user_id]["yatirimlar"] = {
-                "Altın": 0,
-                "EwoPlusCoin": 0,
-                "Bitcoin": 0,
-                "Elmas": 0,
-                "Dolar": 0,
-                "Gümüş": 0
-            }
-
-        for v in varsayilan_varlikler:
-            if v not in data[user_id]["yatirimlar"]:
-                data[user_id]["yatirimlar"][v] = 0
-
-    return data[user_id]
+        },
+        upsert=True,
+        return_document=ReturnDocument.AFTER
+    )
 
 def global_toplam_para():
-    toplam = 0
-    for uid, info in data.items():
-        if uid.isdigit():
-            toplam += info.get("para", 0)
-            toplam += info.get("banka", 0)
-    return toplam
+    pipeline = [
+        {
+            "$group": {
+                "_id": None,
+                "total_para": {"$sum": "$para"},
+                "total_banka": {"$sum": "$banka"}
+            }
+        }
+    ]
+
+    result = list(collection.aggregate(pipeline))
+    if result:
+        return result[0]["total_para"] + result[0]["total_banka"]
+    return 0
 
 def enflasyon_hesapla(taban_fiyat):
     toplam_para = global_toplam_para()
@@ -202,11 +129,10 @@ def enflasyon_hesapla(taban_fiyat):
     return yeni_fiyat
 
 def enflasyon_orani():
-    toplam_para = global_toplam_para()
+    toplam = global_toplam_para()
     REFERANS = 5_000_000
-    oran = toplam_para / REFERANS
-    oran = max(0.5, min(5, oran))
-    return oran
+    oran = toplam / REFERANS
+    return max(0.5, min(5, oran))
 
 MARKET_URUNLERI = {
     "Bronz Kasa": {"fiyat": 500},
@@ -228,24 +154,32 @@ async def param(ctx):
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def paragönder(ctx, member: discord.Member, miktar: int):
-    user = get_user(ctx.author.id)
-    target = get_user(member.id)
 
     if miktar <= 0:
         return await ctx.send("❌ Geçersiz miktar")
 
-    if user["para"] < miktar:
+    sender = get_user(ctx.author.id)
+
+    if sender["para"] < miktar:
         return await ctx.send("❌ Yetersiz bakiye")
 
-    user["para"] -= miktar
-    target["para"] += miktar
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": -miktar}}
+    )
 
-    save_data(data)
-    await ctx.send(f"✅ {member.mention} kişisine {miktar} EwoCoin gönderildi")
+    collection.update_one(
+        {"_id": str(member.id)},
+        {"$inc": {"para": miktar}},
+        upsert=True
+    )
+
+    await ctx.send(f"✅ {member.mention} kişisine {formatla(miktar)} EwoCoin gönderildi")
 
 MAX_BET = 100000
 
 @bot.command()
+@commands.cooldown(1, 5, commands.BucketType.user)
 async def cf(ctx, miktar: str):
 
     user = get_user(ctx.author.id)
@@ -259,7 +193,6 @@ async def cf(ctx, miktar: str):
 
         miktar = int(miktar)
 
-    # 100k üstü direkt iptal
     if miktar > MAX_BET:
         return await ctx.send("❌ En fazla 100.000 EwoCoin ile oynayabilirsin.")
 
@@ -269,71 +202,69 @@ async def cf(ctx, miktar: str):
     if user["para"] < miktar:
         return await ctx.send("❌ Yeterli paran yok.")
 
-    user["para"] -= miktar
-    await ctx.send(f"{ctx.author.mention} {formatla(miktar)} EwoCoin ile oynadı...")
+    # Önce bahis düşülür (atomic)
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": -miktar}}
+    )
 
+    await ctx.send(f"🪙 {ctx.author.mention} {formatla(miktar)} EwoCoin ile yazı tura oynuyor...")
     await asyncio.sleep(2)
 
+    # %50 şans
     if random.choice([True, False]):
-        kazanç = miktar * 2
-        user["para"] += kazanç
-        mesaj = f"🎉 Kazandın! +{formatla(kazanç)}"
-    else:
-        mesaj = f"💀 Kaybettin! -{formatla(miktar)}"
+        kazanc = miktar * 2
 
-    save_data(data)
-    await ctx.send(mesaj)
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": kazanc}}
+        )
+
+        await ctx.send(f"🎉 Kazandın! +{formatla(kazanc)} EwoCoin")
+    else:
+        await ctx.send(f"💀 Kaybettin! -{formatla(miktar)} EwoCoin")
 
 @bot.command()
 @commands.cooldown(1, 15, commands.BucketType.user)
-async def slot(ctx, miktar: str):
-
-    user = get_user(ctx.author.id)
-
-    # ALL sistemi
-    if miktar.lower() == "all":
-        miktar = min(user["para"], MAX_BET)
-    else:
-        if not miktar.isdigit():
-            return await ctx.send("❌ Geçerli miktar gir!")
-
-        miktar = int(miktar)
-
-    # 100k üstü iptal
-    if miktar > MAX_BET:
-        return await ctx.send("❌ En fazla 100.000 EwoCoin ile oynayabilirsin.")
+async def slot(ctx, miktar: int):
 
     if miktar <= 0:
         return await ctx.send("❌ Geçerli miktar gir!")
 
+    user = get_user(ctx.author.id)
+
     if user["para"] < miktar:
         return await ctx.send("❌ Paran yetmiyor.")
 
-    user["para"] -= miktar
+    # Bahis düş
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": -miktar}}
+    )
 
-    msg = await ctx.send("🎰 EwoBot düşünüyor...")
-    await asyncio.sleep(1)
+    msg = await ctx.send("🎰 Slot dönüyor...")
+    await asyncio.sleep(2)
 
     emojis = ["🍒", "🍋", "🍉", "⭐"]
     result = [random.choice(emojis) for _ in range(3)]
     sonuc = " | ".join(result)
 
-    if result.count(result[0]) == 3:
-        kazanç = miktar * 3
-        user["para"] += kazanç
-        text = f"🎉 JACKPOT! +{formatla(kazanç)}"
-    elif any(result.count(x) == 2 for x in result):
-        kazanç = miktar * 2
-        user["para"] += kazanç
-        text = f"🙂 +{formatla(kazanç)} kazandın"
-    else:
-        if random.random() < 0.2:
-            user["para"] += miktar
-            text = "😐 Bahis iade edildi."
-        else:
-            text = "💀 Kaybettin."
+    kazanc = 0
 
-    save_data(data)
+    if result.count(result[0]) == 3:
+        kazanc = miktar * 3
+    elif any(result.count(x) == 2 for x in result):
+        kazanc = miktar * 2
+
+    if kazanc > 0:
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": kazanc}}
+        )
+        text = f"🎉 Kazandın! +{formatla(kazanc)}"
+    else:
+        text = "💀 Kaybettin."
+
     await msg.edit(content=f"{sonuc}\n{text}")
 
 
@@ -358,65 +289,47 @@ async def banka(ctx):
 from discord.ext import tasks
 import datetime
 
-async def gunluk_faiz_zamanli():
-    await bot.wait_until_ready()
-    while not bot.is_closed():
-        now = datetime.datetime.now()
-        hedef_saat = now.replace(hour=19, minute=0, second=0, microsecond=0)
-        if now >= hedef_saat:
-            hedef_saat += datetime.timedelta(days=1)
-        bekleme_suresi = (hedef_saat - now).total_seconds()
-        await asyncio.sleep(bekleme_suresi)
-
-        for user_id, info in data.items():
-            faiz = int(info["banka"] * 0.05)
-            info["banka"] += faiz
-            user = bot.get_user(int(user_id))
-            if user:
-                try:
-                    await user.send(f"💰 Günlük faiziniz yatmıştır: {faiz} EwoCoin\nToplam banka bakiyeniz: {info['banka']} EwoCoin")
-                except:
-                    pass
-        save_data(data)
-
 # BANKA PARA ÇEKME KOMUDU
 
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def bankaçek(ctx, miktar: int):
-    user = get_user(ctx.author.id)
-    max_gunluk = 20000
 
     if miktar <= 0:
         return await ctx.send("❌ Geçersiz miktar")
-    if miktar > max_gunluk:
-        return await ctx.send(f"❌ Tek seferde maksimum {max_gunluk} EwoCoin çekebilirsiniz")
+
+    user = get_user(ctx.author.id)
+
     if user["banka"] < miktar:
         return await ctx.send("❌ Banka bakiyeniz yeterli değil")
 
-    user["banka"] -= miktar
-    user["para"] += miktar
-    save_data(data)
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": miktar, "banka": -miktar}}
+    )
 
-    await ctx.send(f"🏦 {ctx.author.mention}, bankadan {miktar} EwoCoin çektiniz")
+    await ctx.send(f"🏦 {ctx.author.mention}, bankadan {formatla(miktar)} EwoCoin çektiniz")
 
 # BANKAYATIR KOMUDU
 
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def bankayatır(ctx, miktar: int):
-    user = get_user(ctx.author.id)
 
     if miktar <= 0:
         return await ctx.send("❌ Geçersiz miktar")
+
+    user = get_user(ctx.author.id)
+
     if user["para"] < miktar:
         return await ctx.send("❌ Paran yok")
 
-    user["para"] -= miktar
-    user["banka"] += miktar
-    save_data(data)
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": -miktar, "banka": miktar}}
+    )
 
-    await ctx.send(f"🏦 {ctx.author.mention}, bankaya {miktar} EwoCoin yatırdınız")
+    await ctx.send(f"🏦 {ctx.author.mention}, bankaya {formatla(miktar)} EwoCoin yatırdınız")
 
 # YARDIM SİSTEMİ
 
@@ -429,7 +342,7 @@ async def yardım(ctx):
     ekonomi_embed = discord.Embed(
         title="💰 Ekonomi Komutları",
         description="""
-q!para → Paranızı gösterir
+q!param → Paranızı gösterir
 q!paragönder @kişi miktar → Para gönderir
 q!hesap → Hesap bilgilerinizi gösterir
 q!satınal <varlık> <miktar> → Varlık satın alır
@@ -556,14 +469,15 @@ async def meslekler_cmd(ctx):
 @bot.command(name="meslek")
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def meslek_al(ctx, *, secim):
-    # Komut formatı: q!meslek al <Meslek>
-    secim = secim.strip()  # boşlukları temizle
+
+    secim = secim.strip()
+
     if not secim.lower().startswith("al "):
         return await ctx.send("❌ Kullanım: q!meslek al <Meslek>")
 
-    secim = secim[3:].strip()  # "al " kısmını kırp
-    # Meslek adını doğru eşle
+    secim = secim[3:].strip()
     secim = next((m for m in meslekler if m.lower() == secim.lower()), None)
+
     if not secim:
         return await ctx.send("❌ Böyle bir meslek yok.")
 
@@ -573,34 +487,15 @@ async def meslek_al(ctx, *, secim):
     if user["para"] < fiyat:
         return await ctx.send("❌ Paranız yeterli değil.")
 
-    user["para"] -= fiyat
-    user["meslek"] = secim
-    save_data(data)
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {"para": -fiyat},
+            "$set": {"meslek": secim}
+        }
+    )
 
     await ctx.send(f"✅ {ctx.author.mention}, artık {secim} mesleğine sahipsin!")
-
-# Günlük maaş otomatik dağıtımı
-async def gunluk_maas_zamanli():
-    await bot.wait_until_ready()
-    while not bot.is_closed():
-        now = datetime.datetime.now()
-        hedef_saat = now.replace(hour=19, minute=0, second=0, microsecond=0)
-        if now >= hedef_saat:
-            hedef_saat += datetime.timedelta(days=1)
-        bekleme_suresi = (hedef_saat - now).total_seconds()
-        await asyncio.sleep(bekleme_suresi)
-
-        for user_id, info in data.items():
-            meslek = info.get("meslek", "İşsiz")
-            maas = meslekler[meslek]["maas"]
-            info["para"] += maas
-            user = bot.get_user(int(user_id))
-            if user:
-                try:
-                    await user.send(f"💵 Maaşınız yatmıştır! Mesleğiniz: {meslek}\nMaaş: {maas} EwoCoin\nToplam Paranız: {info['para']} EwoCoin")
-                except:
-                    pass
-        save_data(data)
 
 # Hesap bilgilerini gösterme komutu
 @bot.command()
@@ -644,58 +539,27 @@ async def dilen(ctx):
     user = get_user(ctx.author.id)
     kazanilan = random.randint(50, 300)  # Dilenme ile kazanılacak miktar
     user["para"] += kazanilan
-    save_data(data)
+    users_col.update_one(
+    {"_id": str(ctx.author.id)},
+    {"$inc": {"para": kazanilan}}
+)
     await ctx.send(f"🤲 {ctx.author.mention}, dilenerek {kazanilan} EwoCoin kazandın!")
-
-# ================== EKONOMİ SİSTEMİ ==================
-
-@bot.command()
-async def ekonomisifirla(ctx):
-    if ctx.author.id != 1271933410251772017:
-        return await ctx.send("❌ Bu komutu kullanamazsın!")
-
-    data["ekonomi"] = {
-        "Altın": {"current_price": 50000},
-        "EwoPlusCoin": {"current_price": 500000},
-        "Bitcoin": {"current_price": 240000},
-        "Elmas": {"current_price": 80000},
-        "Dolar": {"current_price": 4500},
-        "Gümüş": {"current_price": 35000}
-    }
-
-    save_data(data)
-    await ctx.send("✅ Ekonomi sıfırlandı!")
-
-varsayilan_varlikler = {
-    "Altın": 50000,
-    "EwoPlusCoin": 500000,
-    "Bitcoin": 240000,
-    "Elmas": 80000,
-    "Dolar": 4500,
-    "Gümüş": 35000
-}
-
-# EKONOMİYİ BAŞLAT (BOT AÇILINCA SIFIRLANMAZ)
-if "ekonomi" not in data:
-    data["ekonomi"] = {k: {"current_price": v} for k, v in varsayilan_varlikler.items()}
-    save_data(data)
 
 # ================== EKONOMİ KOMUTU ==================
 
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def ekonomi(ctx):
-    ekonomi_data = data["ekonomi"]
 
     embed = discord.Embed(
         title="📊 EwoEkonomi Sistemi",
         color=discord.Color.blue()
     )
 
-    for varlik, bilgi in ekonomi_data.items():
+    for varlik in ekonomi_collection.find():
         embed.add_field(
-            name=varlik,
-            value=f"Güncel Fiyatı: {bilgi['current_price']:,} EwoCoin",
+            name=varlik["_id"],
+            value=f"Güncel Fiyatı: {varlik['current_price']:,} EwoCoin",
             inline=False
         )
 
@@ -705,96 +569,73 @@ async def ekonomi(ctx):
 # ================== SATINAL KOMUTU ==================
 
 @bot.command()
-@commands.cooldown(1, 4, commands.BucketType.user)
-async def satınal(ctx, varlik: str, miktar: int):
-    varlik = varlik.capitalize()
+async def satin_al(ctx, *, urun):
     user = get_user(ctx.author.id)
 
-    if varlik not in data["ekonomi"]:
-        return await ctx.send("❌ Geçersiz varlık!")
+    if urun not in MARKET_URUNLERI:
+        return await ctx.send("❌ Böyle bir ürün yok.")
 
-    if miktar <= 0:
-        return await ctx.send("❌ Geçersiz miktar!")
+    fiyat = enflasyon_hesapla(MARKET_URUNLERI[urun]["fiyat"])
 
-    fiyat = data["ekonomi"][varlik]["current_price"]
-    toplam = fiyat * miktar
+    if user["para"] < fiyat:
+        return await ctx.send("❌ Paran yetmiyor.")
 
-    if user["para"] < toplam:
-        return await ctx.send(f"❌ Yetersiz bakiye! Gerekli: {toplam:,}")
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {
+                "para": -fiyat,
+                f"envanter.{urun}": 1
+            }
+        }
+    )
 
-    user["para"] -= toplam
-    user["yatirimlar"][varlik] += miktar
-    save_data(data)
-
-    await ctx.send(f"✅ {varlik} satın alındı! ({miktar} adet)")
-
-# ================== EKONOMİ GÜNCELLE ==================
-
-async def ekonomi_guncelle():
-    await bot.wait_until_ready()
-
-    while not bot.is_closed():
-        await asyncio.sleep(2.5 * 3600)  # 2.5 saat
-
-        mesaj = ""
-
-        for varlik in data["ekonomi"]:
-            eski = data["ekonomi"][varlik]["current_price"]
-
-            degisim = random.uniform(-0.1, 0.1)
-            yeni = int(eski * (1 + degisim))
-
-            data["ekonomi"][varlik]["current_price"] = yeni
-
-            mesaj += f"{varlik} ; {eski:,} → {yeni:,}\n"
-
-        save_data(data)
-
-        # DM GÖNDER
-        for user_id in data:
-            if not user_id.isdigit():
-                continue
-
-            user = bot.get_user(int(user_id))
-            if user:
-                try:
-                    embed = discord.Embed(
-                        title="📊 EwoEkonomi Değişimi",
-                        description=mesaj,
-                        color=discord.Color.gold()
-                    )
-                    embed.set_footer(text="EwoBot Ekonomi Sistemi")
-
-                    await user.send(embed=embed)
-                except:
-                    pass
+    await ctx.send(f"🛒 {urun} satın alındı!")
 
 # ================== SAT KOMUDU ==================
+
+# ================== SAT KOMUTU ==================
 
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def sat(ctx, varlik: str, miktar: int):
-    varlik = varlik.capitalize()
-    user = get_user(ctx.author.id)
-
-    if varlik not in data["ekonomi"]:
-        return await ctx.send("❌ Geçersiz varlık!")
 
     if miktar <= 0:
         return await ctx.send("❌ Geçersiz miktar!")
 
-    if user["yatirimlar"][varlik] < miktar:
-        return await ctx.send(f"❌ Yeterli {varlik} yok!")
+    varlik = varlik.capitalize()
 
-    fiyat = data["ekonomi"][varlik]["current_price"]
-    toplam = fiyat * miktar
+    # Varlık kontrol
+    varlik_data = ekonomi_collection.find_one({"_id": varlik})
+    if not varlik_data:
+        return await ctx.send("❌ Geçersiz varlık!")
 
-    user["yatirimlar"][varlik] -= miktar
-    user["para"] += toplam
+    fiyat = varlik_data.get("current_price", 0)
+    toplam_kazanc = fiyat * miktar
 
-    save_data(data)
+    user_id = str(ctx.author.id)
 
-    await ctx.send(f"💰 {miktar} adet {varlik} sattın!\nKazanç: {toplam:,} EwoCoin")
+    # Kullanıcının yeterli varlığı var mı? (atomic kontrol)
+    sonuc = collection.update_one(
+        {
+            "_id": user_id,
+            f"yatirimlar.{varlik}": {"$gte": miktar}
+        },
+        {
+            "$inc": {
+                f"yatirimlar.{varlik}": -miktar,
+                "para": toplam_kazanc
+            }
+        }
+    )
+
+    if sonuc.modified_count == 0:
+        return await ctx.send("❌ Yeterli varlık yok!")
+
+    await ctx.send(
+        f"💰 {miktar} adet **{varlik}** sattın!\n"
+        f"📈 Kazanç: **{formatla(toplam_kazanc)} EwoCoin**"
+    )
 
 # ------------------- Cooldown hata mesajı --------------------
 @bot.event
@@ -864,52 +705,47 @@ async def help(ctx):
 # ------------------- q!gzenginler & q!szenginler -------------------
 @bot.command()
 async def gzenginler(ctx):
-    # Tüm sunuculardaki en zengin 10 kişi (para + banka)
-    toplam_para = []
-    for user_id, info in data.items():
-        if not user_id.isdigit(): continue
-        toplam_para.append((int(user_id), info["para"] + info["banka"]))
-    sirali = sorted(toplam_para, key=lambda x: x[1], reverse=True)[:10]
+    top_users = collection.find().sort(
+        [("para", -1), ("banka", -1)]
+    ).limit(10)
 
-    text = ""
-    for i, (uid, bakiye) in enumerate(sirali, 1):
-        user = bot.get_user(uid)
-        if user:
-            text += f"{i}. {user.name} - {bakiye:,} EwoCoin\n"
+    embed = discord.Embed(title="💎 Global Zenginler", color=discord.Color.gold())
 
-    await ctx.send(embed=discord.Embed(title="💰 Global En Zenginler", description=text, color=discord.Color.gold()))
+    sıra = 1
+    for user in top_users:
+        toplam = user.get("para", 0) + user.get("banka", 0)
+        embed.add_field(
+            name=f"#{sıra}",
+            value=f"{toplam} EwoCoin",
+            inline=False
+        )
+        sıra += 1
+
+    await ctx.send(embed=embed)
 
 @tasks.loop(minutes=10)
 async def global_zenginler_gonder():
-    try:
-        kanal = await bot.fetch_channel(1474500301758267565)
-    except Exception as e:
-        print("Global Zenginler Kanalı fetch edilemedi!", e)
-        return
 
-    toplam_para = []
-    for user_id, info in data.items():
-        if not user_id.isdigit():
-            continue
-        toplam_para.append((int(user_id), info["para"] + info["banka"]))
+    kanal = await bot.fetch_channel(1474500301758267565)
 
-    sirali = sorted(toplam_para, key=lambda x: x[1], reverse=True)[:10]
+    users = collection.find({}, {"para": 1, "banka": 1})
+
+    sirali = sorted(
+        [(u["_id"], u.get("para", 0) + u.get("banka", 0)) for u in users],
+        key=lambda x: x[1],
+        reverse=True
+    )[:10]
 
     text = ""
     for i, (uid, bakiye) in enumerate(sirali, 1):
-        user = bot.get_user(uid)
+        user = bot.get_user(int(uid))
         if user:
-            text += f"{i}. {user.name} - {bakiye:,} EwoCoin\n"
+            text += f"{i}. {user.name} - {bakiye:,}\n"
 
     embed = discord.Embed(
         title="💰 Global En Zenginler",
-        description=text or "Veri bulunamadı.",
+        description=text or "Veri yok",
         color=discord.Color.gold()
-    )
-
-    embed.set_thumbnail(url=bot.user.avatar.url)
-    embed.set_footer(
-        text=f"Son Güncelleme: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
     )
 
     await kanal.send(embed=embed)
@@ -932,35 +768,26 @@ async def szenginler(ctx):
 # ------------------- q!enflasyon -------------------
 @bot.command()
 async def enflasyon(ctx):
-    toplam = 0
-    for info in data.values():
-        if not isinstance(info, dict): continue
-        toplam += info.get("para",0) + info.get("banka",0)
-    await ctx.send(f"📈 Toplam EwoCoin: {toplam:,}")
+    oran = enflasyon_orani()
+    toplam = global_toplam_para()
+
+    embed = discord.Embed(title="📈 Ekonomi Durumu", color=discord.Color.orange())
+    embed.add_field(name="Toplam Para", value=f"{toplam} EwoCoin", inline=False)
+    embed.add_field(name="Enflasyon Oranı", value=f"{round(oran,2)}x", inline=False)
+
+    await ctx.send(embed=embed)
 
 @tasks.loop(minutes=10)
 async def enflasyon_gonder():
-    try:
-        kanal = await bot.fetch_channel(1474499745257881762)
-    except Exception as e:
-        print("Enflasyon Kanalı fetch edilemedi!", e)
-        return
 
-    toplam = 0
-    for info in data.values():
-        if not isinstance(info, dict):
-            continue
-        toplam += info.get("para", 0) + info.get("banka", 0)
+    kanal = await bot.fetch_channel(1474499745257881762)
+
+    toplam = global_toplam_para()
 
     embed = discord.Embed(
         title="📈 Güncel Enflasyon",
         description=f"Toplam Dolaşımdaki EwoCoin:\n\n💸 **{toplam:,}**",
         color=discord.Color.red()
-    )
-
-    embed.set_thumbnail(url=bot.user.avatar.url)
-    embed.set_footer(
-        text=f"Son Güncelleme: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
     )
 
     await kanal.send(embed=embed)
@@ -986,21 +813,21 @@ async def soygun(ctx, member: discord.Member):
         return await ctx.send("❌ Bu kişinin soyulacak kadar nakit parası yok!")
 
     # --- Boost Kontrolleri ---
-    silah = soyguncu["envanter"].get("Silah", 0) > 0
-    koruma = hedef["envanter"].get("Özel Koruma", 0) > 0
+    silah_var = soyguncu["envanter"].get("Silah", 0) > 0
+    koruma_var = hedef["envanter"].get("Özel Koruma", 0) > 0
 
     basari_orani = 0.30
     calma_orani = 0.25
 
-    if silah:
-        basari_orani += 0.50   # %30 → %80
-        calma_orani += 0.10    # %25 → %35
+    if silah_var:
+        basari_orani += 0.50
+        calma_orani += 0.10
 
-    if koruma:
+    if koruma_var:
         basari_orani -= 0.25
         calma_orani -= 0.10
 
-    # Güvenlik clamp (oranlar saçmalamasın)
+    # Güvenlik clamp
     basari_orani = max(0.05, min(basari_orani, 0.95))
     calma_orani = max(0.05, min(calma_orani, 0.50))
 
@@ -1009,8 +836,17 @@ async def soygun(ctx, member: discord.Member):
 
         kazanilan = max(500, int(hedef["para"] * calma_orani))
 
-        hedef["para"] -= kazanilan
-        soyguncu["para"] += kazanilan
+        # Hedeften düş
+        collection.update_one(
+            {"_id": str(member.id)},
+            {"$inc": {"para": -kazanilan}}
+        )
+
+        # Soyguncuya ekle
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": kazanilan}}
+        )
 
         sonuc = (
             f"💰 **Soygun Başarılı!**\n"
@@ -1020,45 +856,42 @@ async def soygun(ctx, member: discord.Member):
 
     else:
         ceza = 2000
-        soyguncu["para"] = max(soyguncu["para"] - ceza, 0)
+
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": -ceza}}
+        )
 
         sonuc = (
             f"💀 **Soygun Başarısız!**\n"
             f"Polis seni yakaladı ve **{formatla(ceza)} EwoCoin** ceza kesti!"
         )
 
-    # --- Tek Kullanımlık Ürünleri Düş ---
-    if silah:
-        soyguncu["envanter"]["Silah"] -= 1
+    # --- Tek Kullanımlık Boost Düşürme ---
+    update_dict = {}
 
-    if koruma:
-        hedef["envanter"]["Özel Koruma"] -= 1
+    if silah_var:
+        update_dict["envanter.Silah"] = -1
 
-    save_data(data)
+    if koruma_var:
+        collection.update_one(
+            {"_id": str(member.id)},
+            {"$inc": {"envanter.Özel Koruma": -1}}
+        )
+
+    if update_dict:
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": update_dict}
+        )
+
     await ctx.send(sonuc)
 
 # ------------------- ADMIN KOMUTLARI -------------------
 ADMIN_ID = 1271933410251772017
 kilitli_kanallar = set()
 
-@bot.command()
-async def maaslarıyatır(ctx):
-    if ctx.author.id != ADMIN_ID:
-        return await ctx.send("❌ Bu komutu kullanamazsın!")
-
-    for user_id, info in data.items():
-        if not user_id.isdigit():
-            continue
-
-        meslek = info.get("meslek", "İşsiz")
-        maas = meslekler[meslek]["maas"]
-        info["para"] += maas
-
-    save_data(data)
-    await ctx.send("✅ Tüm oyuncuların maaşları yatırıldı!")
-
 # ---------------- q!kitle / q!kitleaç ----------------
-ADMIN_ID = 1271933410251772017
 kilitli_kanallar = set()
 
 @bot.command()
@@ -1084,52 +917,32 @@ async def kanal_kontrol(ctx):
     return True
 
 @bot.command()
-async def ekonomideğiştir(ctx):
-    if ctx.author.id != ADMIN_ID: return await ctx.send("❌ Bu komutu kullanamazsın!")
-    # Örnek: rastgele fiyat değişimi
-    for varlik in data["ekonomi"]:
-        degisim = random.randint(-1000, 1000)
-        data["ekonomi"][varlik]["current_price"] += degisim
-    save_data(data)
-    await ctx.send("✅ Ekonomi güncellendi!")
-
-@bot.command()
 async def paraekle(ctx, member: discord.Member, miktar: int):
-    if ctx.author.id != ADMIN_ID: return await ctx.send("❌ Bu komutu kullanamazsın!")
-    user = get_user(member.id)
-    user["para"] += miktar
-    save_data(data)
-    await ctx.send(f"✅ {member.mention} kullanıcısına {miktar} EwoCoin eklendi.")
+    if ctx.author.id != ADMIN_ID:
+        return
+
+    collection.update_one(
+        {"_id": str(member.id)},
+        {"$inc": {"para": miktar}}
+    )
+
+    await ctx.send("✅ Para eklendi.")
 
 @bot.command()
 async def parasil(ctx, member: discord.Member, miktar: int):
-    if ctx.author.id != ADMIN_ID: return await ctx.send("❌ Bu komutu kullanamazsın!")
-    user = get_user(member.id)
-    user["para"] = max(user["para"] - miktar, 0)
-    save_data(data)
-    await ctx.send(f"✅ {member.mention} kullanıcısından {miktar} EwoCoin silindi.")
-
-@bot.command()
-async def faizyatır(ctx):
     if ctx.author.id != ADMIN_ID:
-        return await ctx.send("❌ Bu komutu kullanamazsın!")
+        return
 
-    for user_id, info in data.items():
-        if not user_id.isdigit():
-            continue
+    collection.update_one(
+        {"_id": str(member.id)},
+        {"$inc": {"para": -miktar}}
+    )
 
-        faiz = int(info["banka"] * 0.05)
-        info["banka"] += faiz
-
-    save_data(data)
-    await ctx.send("✅ Tüm oyunculara banka faizi yatırıldı!")
-
-from discord.ui import View, Button
+    await ctx.send("✅ Para silindi.")
 
 # ------------------ BAKIM MODU ------------------
 KANAL_ID = 1474489287859769656  # Mesaj atılacak kanal
 SUNUCU_ID = 1471843922115301493  # Belirtilen sunucu
-ADMIN_ID = 1271933410251772017  # Sadece bu kişi kullanabilir
 
 @bot.command()
 async def bakımbaslat(ctx):
@@ -1593,16 +1406,6 @@ BAKIM_KANAL_ID = 1474489287859769656
 bakim_modu = False
 kilitli_kanallar = set()
 
-# ================= BAKIM KONTROL =================
-
-@bot.check
-async def global_bakim_kontrol(ctx):
-    global bakim_modu
-    if bakim_modu and ctx.author.id != ADMIN_ID:
-        await ctx.send("🛠 Bot şu anda bakımda. Lütfen daha sonra tekrar deneyin.")
-        return False
-    return True
-
 # ================= ANA PANEL =================
 
 @bot.command()
@@ -1715,193 +1518,205 @@ def duyuru_embed():
         description="Duyuru seçenekleri",
         color=discord.Color.red()
     )
-class EkonomiView(discord.ui.View):
+class EkonomiView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    # ================= FAİZ YATIR =================
-    @discord.ui.button(
-        label="Faiz Yatır",
-        custom_id="ekonomi_faiz",
-        style=discord.ButtonStyle.primary
-    )
-    async def faiz(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Ekonomiyi Gör", style=discord.ButtonStyle.green)
+    async def ekonomi_goster(self, interaction: discord.Interaction, button: Button):
 
-        await interaction.response.defer(ephemeral=True)
+        toplam_para = 0
+        toplam_banka = 0
+        kullanici_sayisi = 0
 
-        toplam_dagitilan = 0
-        dm_sayisi = 0
+        for user in collection.find():
+            toplam_para += user.get("para", 0)
+            toplam_banka += user.get("banka", 0)
+            kullanici_sayisi += 1
 
-        for uid, info in data.items():
-            if not uid.isdigit():
-                continue
-
-            banka = info.get("banka", 0)
-            if banka <= 0:
-                continue
-
-            faiz_miktari = int(banka * 0.05)
-            info["banka"] += faiz_miktari
-            toplam_dagitilan += faiz_miktari
-
-            try:
-                user_obj = await bot.fetch_user(int(uid))
-
-                embed = discord.Embed(
-                    title="🏦 EwoBot Faiz Bilgilendirmesi",
-                    color=discord.Color.dark_blue()
-                )
-                embed.set_thumbnail(url=bot.user.avatar.url)
-                embed.add_field(name="Bankadaki Paranız", value=formatla(info["banka"]), inline=False)
-                embed.add_field(name="Yatırılan Faiz", value=formatla(faiz_miktari), inline=False)
-                embed.set_footer(text="EwoBot | Faiz Sistemi")
-
-                await user_obj.send(embed=embed)
-                dm_sayisi += 1
-                await asyncio.sleep(0.7)
-
-            except:
-                pass
-
-        save_data(data)
-
-        await interaction.followup.send(
-            f"✅ Faizler yatırıldı.\n💰 Toplam dağıtılan faiz: {formatla(toplam_dagitilan)}\n📨 DM gönderilen kişi: {dm_sayisi}",
-            ephemeral=True
+        embed = discord.Embed(
+            title="🌍 Global Ekonomi",
+            color=discord.Color.gold()
         )
+
+        embed.add_field(name="💰 Toplam Nakit", value=f"{formatla(toplam_para)}", inline=False)
+        embed.add_field(name="🏦 Toplam Banka", value=f"{formatla(toplam_banka)}", inline=False)
+        embed.add_field(name="👥 Kullanıcı Sayısı", value=f"{kullanici_sayisi}", inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # ================= FAİZ YATIR =================
+@discord.ui.button(
+    label="Faiz Yatır",
+    style=discord.ButtonStyle.primary
+)
+async def faiz(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+    await interaction.response.defer(ephemeral=True)
+
+    toplam_dagitilan = 0
+
+    users = collection.find({}, {"banka": 1})
+
+    for user in users:
+        banka = user.get("banka", 0)
+        if banka <= 0:
+            continue
+
+        faiz = int(banka * 0.05)
+
+        collection.update_one(
+            {"_id": user["_id"]},
+            {"$inc": {"banka": faiz}}
+        )
+
+        toplam_dagitilan += faiz
+
+    await interaction.followup.send(
+        f"✅ Faiz yatırıldı.\nToplam dağıtılan: {formatla(toplam_dagitilan)}",
+        ephemeral=True
+    )
 
     # ================= MAAŞ YATIR =================
-    @discord.ui.button(
-        label="Maaş Yatır",
-        custom_id="ekonomi_maas",
-        style=discord.ButtonStyle.primary
-    )
-    async def maas(self, interaction: discord.Interaction, button: discord.ui.Button):
+@discord.ui.button(
+    label="Maaş Yatır",
+    custom_id="ekonomi_maas",
+    style=discord.ButtonStyle.primary
+)
+async def maas(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
 
-        dm_sayisi = 0
+    dm_sayisi = 0
 
-        for uid, info in data.items():
-            if not uid.isdigit():
-                continue
+    users = collection.find({}, {"meslek": 1, "banka": 1})
 
-            meslek = info.get("meslek", "İşsiz")
+    for user in users:
 
-            if meslek not in meslekler:
-                continue
+        meslek = user.get("meslek", "İşsiz")
 
-            maas = meslekler[meslek]["maas"]
-            info["banka"] += maas
+        if meslek not in meslekler:
+            continue
 
-            try:
-                user_obj = await bot.fetch_user(int(uid))
+        maas_miktar = meslekler[meslek]["maas"]
 
-                embed = discord.Embed(
-                    title="💵 EwoBot Maaş Bilgilendirmesi",
-                    color=discord.Color.dark_blue()
-                )
-                embed.set_thumbnail(url=bot.user.avatar.url)
-                embed.add_field(name="Meslek", value=meslek, inline=False)
-                embed.add_field(name="Yatırılan Maaş", value=formatla(maas), inline=False)
-                embed.set_footer(text="EwoBot | Maaş Sistemi")
-
-                await user_obj.send(embed=embed)
-                dm_sayisi += 1
-                await asyncio.sleep(0.7)
-
-            except:
-                pass
-
-        save_data(data)
-
-        await interaction.followup.send(
-            f"✅ Maaşlar bankaya yatırıldı.\n📨 DM gönderilen kişi: {dm_sayisi}",
-            ephemeral=True
+        collection.update_one(
+            {"_id": user["_id"]},
+            {"$inc": {"banka": maas_miktar}}
         )
+
+        try:
+            user_obj = await bot.fetch_user(int(user["_id"]))
+
+            embed = discord.Embed(
+                title="💵 EwoBot Maaş Bilgilendirmesi",
+                color=discord.Color.dark_blue()
+            )
+            embed.set_thumbnail(url=bot.user.avatar.url)
+            embed.add_field(name="Meslek", value=meslek, inline=False)
+            embed.add_field(name="Yatırılan Maaş", value=formatla(maas_miktar), inline=False)
+            embed.set_footer(text="EwoBot | Maaş Sistemi")
+
+            await user_obj.send(embed=embed)
+            dm_sayisi += 1
+            await asyncio.sleep(0.7)
+
+        except:
+            pass
+
+    await interaction.followup.send(
+        f"✅ Maaşlar bankaya yatırıldı.\n📨 DM gönderilen kişi: {dm_sayisi}",
+        ephemeral=True
+    )
 
     # ================= EKONOMİ SIFIRLA =================
     @discord.ui.button(
-        label="Ekonomi Sıfırla",
-        custom_id="ekonomi_sifirla",
-        style=discord.ButtonStyle.danger
-    )
-    async def ekonomisifirla(self, interaction: discord.Interaction, button: discord.ui.Button):
+    label="Ekonomi Sıfırla",
+    custom_id="ekonomi_sifirla",
+    style=discord.ButtonStyle.danger
+)
+async def ekonomisifirla(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        for varlik in data["ekonomi"]:
-            data["ekonomi"][varlik]["current_price"] = varsayilan_varlikler[varlik]
-
-        save_data(data)
-
-        await interaction.response.send_message(
-            "💰 Ekonomi fiyatları varsayılana döndürüldü.",
-            ephemeral=True
+    for varlik, fiyat in varsayilan_varlikler.items():
+        economy_col.update_one(
+            {"_id": varlik},
+            {"$set": {"current_price": fiyat}},
+            upsert=True
         )
+
+    await interaction.response.send_message(
+        "💰 Ekonomi fiyatları varsayılana döndürüldü.",
+        ephemeral=True
+    )
 
     # ================= EKONOMİ DEĞİŞTİR =================
-    @discord.ui.button(
-        label="Ekonomi Değiştir",
-        custom_id="ekonomi_degistir",
-        style=discord.ButtonStyle.primary
+ @discord.ui.button(
+    label="Ekonomi Değiştir",
+    custom_id="ekonomi_degistir",
+    style=discord.ButtonStyle.primary
+)
+async def ekonomidegistir(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+    await interaction.response.defer(ephemeral=True)
+
+    mesaj_text = ""
+    dm_sayisi = 0
+
+    for varlik in varsayilan_varlikler.keys():
+
+        ekonomi = economy_col.find_one({"_id": varlik})
+
+        if not ekonomi:
+            eski = varsayilan_varlikler[varlik]
+        else:
+            eski = ekonomi["current_price"]
+
+        degisim = random.uniform(-0.15, 0.15)
+        yeni = int(eski * (1 + degisim))
+
+        economy_col.update_one(
+            {"_id": varlik},
+            {"$set": {"current_price": yeni}},
+            upsert=True
+        )
+
+        if yeni > eski:
+            emoji = "🟢"
+        elif yeni < eski:
+            emoji = "🔴"
+        else:
+            emoji = "⚪"
+
+        mesaj_text += f"{emoji} **{varlik}**\nEski: {formatla(eski)} → Yeni: {formatla(yeni)}\n\n"
+
+    embed = discord.Embed(
+        title="📊 EwoEkonomi Güncellendi!",
+        description=mesaj_text,
+        color=discord.Color.dark_blue()
     )
-    async def ekonomidegistir(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        await interaction.response.defer(ephemeral=True)
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
 
-        mesaj_text = ""
+    log_kanal = bot.get_channel(1474499591238848555)
+    if log_kanal:
+        await log_kanal.send(embed=embed)
 
-        for varlik in data["ekonomi"]:
+    users = collection.find({}, {"_id": 1})
 
-            eski = data["ekonomi"][varlik]["current_price"]
-            degisim = random.uniform(-0.15, 0.15)
-            yeni = int(eski * (1 + degisim))
+    for user in users:
+        try:
+            user_obj = await bot.fetch_user(int(user["_id"]))
+            await user_obj.send(embed=embed)
+            dm_sayisi += 1
+            await asyncio.sleep(0.7)
+        except:
+            pass
 
-            data["ekonomi"][varlik]["current_price"] = yeni
-
-            if yeni > eski:
-                emoji = "🟢"
-            elif yeni < eski:
-                emoji = "🔴"
-            else:
-                emoji = "⚪"
-
-            mesaj_text += f"{emoji} **{varlik}**\nEski: {formatla(eski)} → Yeni: {formatla(yeni)}\n\n"
-
-        embed = discord.Embed(
-            title="📊 EwoEkonomi Güncellendi!",
-            description=mesaj_text,
-            color=discord.Color.dark_blue()
-        )
-
-        embed.set_thumbnail(url=bot.user.avatar.url)
-        embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
-
-        save_data(data)
-
-        # LOG KANALI
-        log_kanal = bot.get_channel(1474499591238848555)
-        if log_kanal:
-            await log_kanal.send(embed=embed)
-
-        # SADECE BOTU KULLANMIŞ KULLANICILARA DM
-        dm_sayisi = 0
-
-        for uid in data:
-            if not uid.isdigit():
-                continue
-
-            try:
-                user_obj = await bot.fetch_user(int(uid))
-                await user_obj.send(embed=embed)
-                dm_sayisi += 1
-                await asyncio.sleep(0.7)
-            except:
-                pass
-
-        await interaction.followup.send(
-            f"✅ Ekonomi başarıyla güncellendi.\n📨 DM gönderilen kişi: {dm_sayisi}",
-            ephemeral=True
-        )
+    await interaction.followup.send(
+        f"✅ Ekonomi başarıyla güncellendi.\n📨 DM gönderilen kişi: {dm_sayisi}",
+        ephemeral=True
+    )
 
     # ================= GERİ =================
     @discord.ui.button(
@@ -1922,10 +1737,17 @@ class ParaEkleModal(discord.ui.Modal, title="Para Ekle"):
     miktar = discord.ui.TextInput(label="Miktar")
 
     async def on_submit(self, interaction):
-        user = get_user(int(self.user_id.value))
-        user["para"] += int(self.miktar.value)
-        save_data(data)
-        await interaction.response.send_message("✅ Para eklendi.", ephemeral=True)
+
+        collection.update_one(
+            {"_id": self.user_id.value},
+            {"$inc": {"para": int(self.miktar.value)}},
+            upsert=True
+        )
+
+        await interaction.response.send_message(
+            "✅ Para eklendi.",
+            ephemeral=True
+        )
 
 
 class ParaSilModal(discord.ui.Modal, title="Para Sil"):
@@ -1933,10 +1755,26 @@ class ParaSilModal(discord.ui.Modal, title="Para Sil"):
     miktar = discord.ui.TextInput(label="Miktar")
 
     async def on_submit(self, interaction):
-        user = get_user(int(self.user_id.value))
-        user["para"] = max(user["para"] - int(self.miktar.value), 0)
-        save_data(data)
-        await interaction.response.send_message("✅ Para silindi.", ephemeral=True)
+
+        user = collection.find_one({"_id": self.user_id.value})
+
+        if not user:
+            return await interaction.response.send_message(
+                "❌ Kullanıcı bulunamadı.",
+                ephemeral=True
+            )
+
+        yeni_para = max(user.get("para", 0) - int(self.miktar.value), 0)
+
+        collection.update_one(
+            {"_id": self.user_id.value},
+            {"$set": {"para": yeni_para}}
+        )
+
+        await interaction.response.send_message(
+            "✅ Para silindi.",
+            ephemeral=True
+        )
 
 
 # ================= KANAL VIEW =================
@@ -1990,8 +1828,8 @@ class KitleAcModal(discord.ui.Modal, title="Kanal Kilit Aç"):
 
 @bot.check
 async def global_bakim_kontrol(ctx):
-    if data.get("ayarlar", {}).get("bakim_modu", False) and ctx.author.id != ADMIN_ID:
-        await ctx.send("🛠 Bot şu anda bakımda. Lütfen daha sonra tekrar deneyin.")
+    if bakim_aktif_mi() and ctx.author.id != ADMIN_ID:
+        await ctx.send("🚧 Bot bakım modunda.")
         return False
     return True
 
@@ -2007,15 +1845,17 @@ class BakimView(discord.ui.View):
         custom_id="bakim_baslat"
     )
     async def baslat(self, interaction, button):
-        # Kalıcı bakım modunu aktif et
-        if "ayarlar" not in data:
-            data["ayarlar"] = {}
-        data["ayarlar"]["bakim_modu"] = True
-        save_data(data)
+
+        settings_col.update_one(
+            {"_id": "global"},
+            {"$set": {"bakim_modu": True}},
+            upsert=True
+        )
 
         kanal = bot.get_channel(BAKIM_KANAL_ID)
         if kanal:
             await kanal.send("@everyone 🛠 EwoBot bakıma alınmıştır.")
+
         await interaction.response.send_message("✅ Bakım başlatıldı.", ephemeral=True)
 
     @discord.ui.button(
@@ -2024,15 +1864,17 @@ class BakimView(discord.ui.View):
         custom_id="bakim_bitir"
     )
     async def bitir(self, interaction, button):
-        # Kalıcı bakım modunu kapat
-        if "ayarlar" not in data:
-            data["ayarlar"] = {}
-        data["ayarlar"]["bakim_modu"] = False
-        save_data(data)
+
+        settings_col.update_one(
+            {"_id": "global"},
+            {"$set": {"bakim_modu": False}},
+            upsert=True
+        )
 
         kanal = bot.get_channel(BAKIM_KANAL_ID)
         if kanal:
             await kanal.send("@everyone ✅ EwoBot bakımdan çıktı.")
+
         await interaction.response.send_message("✅ Bakım kapatıldı.", ephemeral=True)
 
     @discord.ui.button(
@@ -2041,7 +1883,10 @@ class BakimView(discord.ui.View):
         custom_id="bakim_geri"
     )
     async def geri(self, interaction, button):
-        await interaction.response.edit_message(embed=admin_main_embed(), view=AdminMainView())
+        await interaction.response.edit_message(
+            embed=admin_main_embed(),
+            view=AdminMainView()
+        )
 
 
 # ================= DUYURU VIEW =================
@@ -2067,6 +1912,7 @@ class DuyuruView(discord.ui.View):
         await interaction.response.send_modal(EmbedDuyuruModal())
 
     @discord.ui.button(
+
     label="Düz Duyuru",
     style=discord.ButtonStyle.secondary,
     custom_id="duyuru_duz"
@@ -2369,9 +2215,15 @@ async def satin_al(interaction, urun):
             ephemeral=True
         )
 
-    user["para"] -= fiyat
-    user["envanter"][urun] += 1
-    save_data(data)
+    collection.update_one(
+        {"_id": str(interaction.user.id)},
+        {
+            "$inc": {
+                "para": -fiyat,
+                f"envanter.{urun}": 1
+            }
+        }
+    )
 
     await interaction.response.send_message(
         f"✅ {urun} satın alındı!",
@@ -2410,7 +2262,6 @@ async def balıktut(ctx):
 
     user = get_user(ctx.author.id)
 
-    # Güvenli kontrol
     oltali = user.get("envanter", {}).get("Olta", 0) > 0
 
     oranlar = {
@@ -2425,7 +2276,11 @@ async def balıktut(ctx):
         oranlar["Altın"] += 10
         oranlar["Elmas"] += 10
         oranlar["Efsanevi"] += 20
-        user["envanter"]["Olta"] -= 1
+
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"envanter.Olta": -1}}
+        )
 
     balık = random.choices(
         population=list(oranlar.keys()),
@@ -2441,8 +2296,11 @@ async def balıktut(ctx):
     }
 
     kazanc = degerler[balık]
-    user["para"] += kazanc
-    save_data(data)
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": kazanc}}
+    )
 
     if oltali:
         await ctx.send(f"🎣 Olta sayesinde {balık} Balık tuttun! +{formatla(kazanc)}")
@@ -2455,7 +2313,6 @@ async def kasaaç(ctx, *, kasa_adi: str):
 
     user = get_user(ctx.author.id)
 
-    # Küçük harf normalize
     kasa_map = {
         "bronz": "Bronz Kasa",
         "gümüş": "Gümüş Kasa",
@@ -2475,8 +2332,6 @@ async def kasaaç(ctx, *, kasa_adi: str):
 
     if user["envanter"].get(kasa_adi, 0) <= 0:
         return await ctx.send("❌ Bu kasadan envanterinde yok!")
-
-    user["envanter"][kasa_adi] -= 1
 
     kasa_oduller = {
         "Bronz Kasa": (100, 1000),
@@ -2499,25 +2354,28 @@ async def kasaaç(ctx, *, kasa_adi: str):
     else:
         odul = random.randint(int(min_odul + (max_odul - min_odul) * 0.7), max_odul)
 
-    await ctx.send(f"🎁 {kasa_adi} açılıyor...")
-    await asyncio.sleep(2)
-
-    user["para"] += odul
-    save_data(data)
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {
+                "envanter." + kasa_adi: -1,
+                "para": odul
+            }
+        }
+    )
 
     await ctx.send(
-        f"💰 {kasa_adi} açıldı!\n"
-        f"İçinden **{formatla(odul)} EwoCoin** çıktı!"
+        f"🎁 {kasa_adi} açıldı!\n"
+        f"💰 İçinden **{formatla(odul)} EwoCoin** çıktı!"
     )
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
 
 @bot.event
 async def on_ready():
-    print(f"{bot.user} hazır!")
+    print(f"{bot.user} aktif ve hazır!")
 
-    durum_degistir.start()
-
+    # View'leri ekle (kalıcı butonlar için)
     bot.add_view(TicketPanelView())
     bot.add_view(AdminMainView())
     bot.add_view(EkonomiView())
@@ -2525,12 +2383,17 @@ async def on_ready():
     bot.add_view(BakimView())
     bot.add_view(DuyuruView())
 
+    # Loopları güvenli başlat
+    if not durum_degistir.is_running():
+        print("Durum değiştir loop başlatıldı")
+        durum_degistir.start()
+
     if not global_zenginler_gonder.is_running():
-        print("Global zenginler loop çalıştı")
+        print("Global zenginler loop başlatıldı")
         global_zenginler_gonder.start()
 
     if not enflasyon_gonder.is_running():
-        print("Enflasyon loop çalıştı")
+        print("Enflasyon loop başlatıldı")
         enflasyon_gonder.start()
 
 @bot.event
@@ -2541,5 +2404,6 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_modal(TicketCevapModal(user_id))
     
 
-TOKEN = os.getenv("TOKEN")
-bot.run(TOKEN)
+if __name__ == "__main__":
+    TOKEN = os.getenv("TOKEN")
+    bot.run(TOKEN)
