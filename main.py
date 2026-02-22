@@ -23,6 +23,7 @@ collection = db["users"]
 economy_col = db["ekonomi"]  
 ekonomi_collection = db["ekonomi"]
 settings_collection = db["settings"]
+settings_col = db["settings"]
 
 # fonksyon bakim modu
 
