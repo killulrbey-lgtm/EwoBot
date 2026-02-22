@@ -144,6 +144,32 @@ def get_user(user_id):
         return_document=ReturnDocument.AFTER
     )
 
+# XP SİSTEMİ
+async def xp_ekle(user_id, miktar):
+
+    user = get_user(user_id)
+
+    xp = user.get("xp", 0)
+    level = user.get("level", 1)
+
+    xp += miktar
+    gereken = level * 100
+
+    while xp >= gereken:
+        xp -= gereken
+        level += 1
+        gereken = level * 100
+
+    collection.update_one(
+        {"_id": str(user_id)},
+        {
+            "$set": {
+                "xp": xp,
+                "level": level
+            }
+        }
+    )
+
 def global_toplam_para():
     pipeline = [
         {
@@ -158,7 +184,7 @@ def global_toplam_para():
     result = list(collection.aggregate(pipeline))
     if result:
         return result[0]["total_para"] + result[0]["total_banka"]
-    return 0
+    return 0 
 
 def enflasyon_hesapla(taban_fiyat):
     toplam_para = global_toplam_para()
@@ -291,6 +317,33 @@ async def cf(ctx, miktar: str):
 
     await xp_ekle(ctx.author.id, 5)
 
+# level sistemi
+@bot.command()
+async def level(ctx):
+
+    user = get_user(ctx.author.id)
+
+    xp = user.get("xp", 0)
+    level = user.get("level", 1)
+
+    gereken = level * 100
+    oran = int((xp / gereken) * 10)
+
+    bar = "🟩" * oran + "⬜" * (10 - oran)
+
+    embed = discord.Embed(
+        title="🏆 Kullanıcı Profili",
+        color=discord.Color.gold()
+    )
+
+    embed.add_field(name="Seviye", value=f"LVL {level}", inline=True)
+    embed.add_field(name="XP", value=f"{xp} / {gereken}", inline=True)
+    embed.add_field(name="İlerleme", value=bar, inline=False)
+
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+
+    await ctx.send(embed=embed)
+
 # =====================================================
 # 🎰 SLOT KOMUTU (YENİ ORAN SİSTEMİ - FİNAL)
 # %20 = 3 aynı (x3)
@@ -367,54 +420,6 @@ async def slot(ctx, miktar):
     await msg.edit(content=f"{sonuc}\n{text}")
     await xp_ekle(ctx.author.id, 5)
 
-#   XP SİSTEMİ
-def xp_gerekli(level):
-    return 100 + (level * 50)
-
-async def xp_ekle(user_id, miktar):
-    user = get_user(user_id)
-
-    yeni_xp = user["xp"] + miktar
-    level = user["level"]
-
-    gerekli = xp_gerekli(level)
-
-    if yeni_xp >= gerekli:
-        yeni_xp -= gerekli
-        level += 1
-
-    collection.update_one(
-        {"_id": str(user_id)},
-        {"$set": {"xp": yeni_xp, "level": level}}
-    )
-
-#      LEVEL KOMUTU
-@bot.command()
-async def level(ctx):
-
-    user = get_user(ctx.author.id)
-
-    xp = user.get("xp", 0)
-    level = user.get("level", 1)
-
-    gereken = level * 100
-    oran = int((xp / gereken) * 10)
-
-    bar = "🟩" * oran + "⬜" * (10 - oran)
-
-    embed = discord.Embed(
-        title="🏆 Kullanıcı Profili",
-        color=discord.Color.gold()
-    )
-
-    embed.add_field(name="Seviye", value=f"LVL {level}", inline=True)
-    embed.add_field(name="XP", value=f"{xp} / {gereken}", inline=True)
-    embed.add_field(name="İlerleme", value=bar, inline=False)
-
-    embed.set_thumbnail(url=ctx.author.avatar.url)
-
-    await ctx.send(embed=embed)
-
 # MAAŞ 
 @bot.command(name="maaş")
 async def maas(ctx):
@@ -441,7 +446,7 @@ async def maas(ctx):
     await ctx.send(f"💰 Maaşını aldın! +{formatla(maas_miktari)} EwoCoin")
 
 # gunluk 
-@bot.command(name="günlük")
+@bot.command(name="gunluk")
 async def gunluk(ctx):
 
     user = get_user(ctx.author.id)
@@ -784,7 +789,10 @@ async def dilen(ctx):
 
 @bot.command()
 @commands.cooldown(1, 10, commands.BucketType.user)
-async def blackjack(ctx, miktar: str):
+async def blackjack(ctx, miktar: str = None):
+
+    if miktar is None:
+        return await ctx.send("❌ Kullanım: q!blackjack <miktar / all>")
 
     MAX_BET = 100000
     user = get_user(ctx.author.id)
@@ -795,14 +803,13 @@ async def blackjack(ctx, miktar: str):
     else:
         if not miktar.isdigit():
             return await ctx.send("❌ Geçerli bir miktar gir.")
-
         miktar = int(miktar)
 
     if miktar <= 0:
         return await ctx.send("❌ Geçerli bir miktar gir.")
 
     if miktar > MAX_BET:
-        return await ctx.send("❌ Blackjack'te maksimum 100.000 EwoCoin oynayabilirsin.")
+        miktar = MAX_BET
 
     if user["para"] < miktar:
         return await ctx.send("❌ Yeterli paran yok.")
@@ -828,17 +835,16 @@ async def blackjack(ctx, miktar: str):
     oyuncu_toplam = toplam(oyuncu)
     bot_toplam = toplam(bot_kart)
 
-    # Bot kart çek
+    # Bot kart çeker
     while bot_toplam < 17:
         bot_kart.append(random.choice(kartlar))
         bot_toplam = toplam(bot_kart)
 
-    mesaj = f"""
-🃏 **Blackjack**
-
-Sen: {oyuncu} → {oyuncu_toplam}
-Bot: {bot_kart} → {bot_toplam}
-"""
+    mesaj = (
+        "🃏 **Blackjack**\n\n"
+        f"👤 Sen: {oyuncu} → {oyuncu_toplam}\n"
+        f"🤖 Bot: {bot_kart} → {bot_toplam}\n"
+    )
 
     if oyuncu_toplam > 21:
         sonuc = "💀 Battın! Kaybettin."
@@ -859,6 +865,7 @@ Bot: {bot_kart} → {bot_toplam}
         sonuc = "💀 Kaybettin."
 
     await xp_ekle(ctx.author.id, 5)
+
     await ctx.send(mesaj + "\n" + sonuc)
 
 # ================== EKONOMİ KOMUTU ==================
