@@ -242,7 +242,6 @@ async def paragönder(ctx, member: discord.Member, miktar: int):
     )
 
     await ctx.send(f"✅ {member.mention} kişisine {formatla(miktar)} EwoCoin gönderildi")
-
     await xp_ekle(ctx.author.id, 5)
 
 MAX_BET = 100000
@@ -253,7 +252,6 @@ async def cf(ctx, miktar: str):
 
     user = get_user(ctx.author.id)
 
-    # ALL sistemi
     if miktar.lower() == "all":
         miktar = min(user["para"], MAX_BET)
     else:
@@ -271,7 +269,6 @@ async def cf(ctx, miktar: str):
     if user["para"] < miktar:
         return await ctx.send("❌ Yeterli paran yok.")
 
-    # Önce bahis düşülür (atomic)
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": -miktar}}
@@ -280,7 +277,6 @@ async def cf(ctx, miktar: str):
     await ctx.send(f"🪙 {ctx.author.mention} {formatla(miktar)} EwoCoin ile yazı tura oynuyor...")
     await asyncio.sleep(2)
 
-    # %50 şans
     if random.choice([True, False]):
         kazanc = miktar * 2
 
@@ -308,9 +304,6 @@ async def slot(ctx, miktar):
 
     user = get_user(ctx.author.id)
 
-    # =========================
-    # 💰 MİKTAR KONTROL
-    # =========================
     if str(miktar).lower() == "all":
         miktar = user["para"]
     else:
@@ -328,9 +321,6 @@ async def slot(ctx, miktar):
     if user["para"] < miktar:
         return await ctx.send("❌ Paran yetmiyor.")
 
-    # =========================
-    # 💸 PARAYI DÜŞ
-    # =========================
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": -miktar}}
@@ -340,46 +330,31 @@ async def slot(ctx, miktar):
     await asyncio.sleep(2)
 
     emojis = ["🍒", "🍋", "🍉", "⭐"]
-
     ihtimal = random.randint(1, 100)
     kazanc = 0
 
-    # =========================
-    # 🎯 3 AYNI (%20)
-    # =========================
     if ihtimal <= 20:
         sembol = random.choice(emojis)
         result = [sembol, sembol, sembol]
         kazanc = miktar * 3
 
-    # =========================
-    # 🎯 2 AYNI (%35)
-    # =========================
-    elif ihtimal <= 55:  # 20 + 35 = 55
+    elif ihtimal <= 55:
         sembol = random.choice(emojis)
         farkli = random.choice([e for e in emojis if e != sembol])
         result = [sembol, sembol, farkli]
         random.shuffle(result)
         kazanc = miktar * 2
 
-    # =========================
-    # 🎯 1 EŞLEŞME (%45)
-    # =========================
     else:
-        # tamamen karışık
         result = random.sample(emojis, 3)
 
-        # %30 iade / %70 kayıp
         if random.randint(1, 100) <= 30:
-            kazanc = miktar  # iade
+            kazanc = miktar
         else:
             kazanc = 0
 
     sonuc = " | ".join(result)
 
-    # =========================
-    # 💵 KAZANÇ EKLE
-    # =========================
     if kazanc > 0:
         collection.update_one(
             {"_id": str(ctx.author.id)},
@@ -390,7 +365,6 @@ async def slot(ctx, miktar):
         text = "💀 Kaybettin."
 
     await msg.edit(content=f"{sonuc}\n{text}")
-
     await xp_ekle(ctx.author.id, 5)
 
 #   XP SİSTEMİ
@@ -442,8 +416,8 @@ async def level(ctx):
 # MAAŞ 
 @bot.command()
 async def maaş(ctx):
-    user = get_user(ctx.author.id)
 
+    user = get_user(ctx.author.id)
     simdi = time.time()
 
     if simdi - user.get("son_maas", 0) < 18000:
@@ -462,7 +436,6 @@ async def maaş(ctx):
     )
 
     await xp_ekle(ctx.author.id, 5)
-
     await ctx.send(f"💰 Maaşını aldın! +{formatla(maas)} EwoCoin")
 
 # gunluk 
@@ -573,9 +546,13 @@ async def yardım(ctx):
 q!param → Paranızı gösterir
 q!paragönder @kişi miktar → Para gönderir
 q!hesap → Hesap bilgilerinizi gösterir
+q!level → Hesap Levelinizi gösterir
 q!satınal <varlık> <miktar> → Varlık satın alır
 q!sat <varlık> <miktar> → Varlık satar
 q!ekonomi → Ekonomi durumunu gösterir
+q!dilen → Dilenme komutu
+q!günlük → Günlük paranızı verir
+q!maaş → Maaşınızı yatırır
 """,
         color=discord.Color.green()
     )
@@ -586,7 +563,7 @@ q!ekonomi → Ekonomi durumunu gösterir
 q!cf miktar → Yazı tura
 q!balıktut → Balık Oyunu
 q!slot miktar → Slot oyunu
-q!dilen → Dilenme komutu
+q!blackjack miktar → Blackjack oyunu
 """,
         color=discord.Color.red()
     )
@@ -771,8 +748,8 @@ async def hesap(ctx):
 @bot.command()
 @commands.cooldown(1, 60, commands.BucketType.user)
 async def dilen(ctx):
-    user = get_user(ctx.author.id)
 
+    user = get_user(ctx.author.id)
     olay = random.random()
 
     if olay < 0.30:
@@ -2312,7 +2289,6 @@ async def envanter(ctx):
 async def balıktut(ctx):
 
     user = get_user(ctx.author.id)
-
     oltali = user.get("envanter", {}).get("Olta", 0) > 0
 
     oranlar = {
@@ -2357,7 +2333,7 @@ async def balıktut(ctx):
         await ctx.send(f"🎣 Olta sayesinde {balık} Balık tuttun! +{formatla(kazanc)}")
     else:
         await ctx.send(f"🎣 {balık} Balık tuttun! +{formatla(kazanc)}")
-	
+
     await xp_ekle(ctx.author.id, 5)
 
 # kasa aç 
@@ -2396,7 +2372,6 @@ async def kasaaç(ctx, *, kasa_adi: str):
     }
 
     min_odul, max_odul = kasa_oduller[kasa_adi]
-
     roll = random.random()
 
     if roll < 0.65:
@@ -2422,7 +2397,7 @@ async def kasaaç(ctx, *, kasa_adi: str):
         f"💰 İçinden **{formatla(odul)} EwoCoin** çıktı!"
     )
 
-	await xp_ekle(ctx.author.id, 15)
+    await xp_ekle(ctx.author.id, 15)
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
 
