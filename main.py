@@ -57,10 +57,22 @@ intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
+def get_prefix(bot, message):
+    prefixes = [
+        "q!",
+        "Q!",
+        "q",
+        "Q",
+        "ewo ",
+        "Ewo ",
+        "!"
+    ]
+    return commands.when_mentioned_or(*prefixes)(bot, message)
+
 bot = commands.Bot(
-    command_prefix="q!",
-    intents=intents,
-    help_command=None
+    command_prefix=get_prefix,
+    case_insensitive=True,
+    intents=intents
 )
 
 # ================= TEST KOMUT =================
