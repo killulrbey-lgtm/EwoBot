@@ -1558,14 +1558,14 @@ class EkonomiView(View):
             if banka <= 0:
                 continue
 
-            faiz = int(banka * 0.05)
+            faiz_miktar = int(banka * 0.05)
 
             collection.update_one(
                 {"_id": user["_id"]},
-                {"$inc": {"banka": faiz}}
+                {"$inc": {"banka": faiz_miktar}}
             )
 
-            toplam_dagitilan += faiz
+            toplam_dagitilan += faiz_miktar
 
         await interaction.followup.send(
             f"✅ Faiz yatırıldı.\nToplam dağıtılan: {formatla(toplam_dagitilan)}",
@@ -1621,7 +1621,7 @@ class EkonomiView(View):
     async def ekonomisifirla(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         for varlik, fiyat in varsayilan_varlikler.items():
-            ekonomi_collection.update_one(
+            economy_col.update_one(
                 {"_id": varlik},
                 {"$set": {"current_price": fiyat}},
                 upsert=True
@@ -1632,82 +1632,73 @@ class EkonomiView(View):
             ephemeral=True
         )
 
-    # ================= EKONOMİ DEĞİŞTİR =================
- @discord.ui.button(
-    label="Ekonomi Değiştir",
-    custom_id="ekonomi_degistir",
-    style=discord.ButtonStyle.primary
-)
-async def ekonomidegistir(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Ekonomi Değiştir", custom_id="ekonomi_degistir", style=discord.ButtonStyle.primary)
+    async def ekonomidegistir(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-    await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
 
-    mesaj_text = ""
-    dm_sayisi = 0
+        mesaj_text = ""
+        dm_sayisi = 0
 
-    for varlik in varsayilan_varlikler.keys():
+        for varlik in varsayilan_varlikler.keys():
 
-        ekonomi = economy_col.find_one({"_id": varlik})
+            ekonomi = economy_col.find_one({"_id": varlik})
 
-        if not ekonomi:
-            eski = varsayilan_varlikler[varlik]
-        else:
-            eski = ekonomi["current_price"]
+            if not ekonomi:
+                eski = varsayilan_varlikler[varlik]
+            else:
+                eski = ekonomi["current_price"]
 
-        degisim = random.uniform(-0.15, 0.15)
-        yeni = int(eski * (1 + degisim))
+            degisim = random.uniform(-0.15, 0.15)
+            yeni = int(eski * (1 + degisim))
 
-        economy_col.update_one(
-            {"_id": varlik},
-            {"$set": {"current_price": yeni}},
-            upsert=True
+            economy_col.update_one(
+                {"_id": varlik},
+                {"$set": {"current_price": yeni}},
+                upsert=True
+            )
+
+            if yeni > eski:
+                emoji = "🟢"
+            elif yeni < eski:
+                emoji = "🔴"
+            else:
+                emoji = "⚪"
+
+            mesaj_text += f"{emoji} **{varlik}**\nEski: {formatla(eski)} → Yeni: {formatla(yeni)}\n\n"
+
+        embed = discord.Embed(
+            title="📊 EwoEkonomi Güncellendi!",
+            description=mesaj_text,
+            color=discord.Color.dark_blue()
         )
 
-        if yeni > eski:
-            emoji = "🟢"
-        elif yeni < eski:
-            emoji = "🔴"
-        else:
-            emoji = "⚪"
+        embed.set_thumbnail(url=bot.user.avatar.url)
+        embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
 
-        mesaj_text += f"{emoji} **{varlik}**\nEski: {formatla(eski)} → Yeni: {formatla(yeni)}\n\n"
+        log_kanal = bot.get_channel(1474499591238848555)
+        if log_kanal:
+            await log_kanal.send(embed=embed)
 
-    embed = discord.Embed(
-        title="📊 EwoEkonomi Güncellendi!",
-        description=mesaj_text,
-        color=discord.Color.dark_blue()
-    )
+        users = collection.find({}, {"_id": 1})
 
-    embed.set_thumbnail(url=bot.user.avatar.url)
-    embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
+        for user in users:
+            try:
+                user_obj = await bot.fetch_user(int(user["_id"]))
+                await user_obj.send(embed=embed)
+                dm_sayisi += 1
+                await asyncio.sleep(0.7)
+            except:
+                pass
 
-    log_kanal = bot.get_channel(1474499591238848555)
-    if log_kanal:
-        await log_kanal.send(embed=embed)
+        await interaction.followup.send(
+            f"✅ Ekonomi başarıyla güncellendi.\n📨 DM gönderilen kişi: {dm_sayisi}",
+            ephemeral=True
+        )
 
-    users = collection.find({}, {"_id": 1})
-
-    for user in users:
-        try:
-            user_obj = await bot.fetch_user(int(user["_id"]))
-            await user_obj.send(embed=embed)
-            dm_sayisi += 1
-            await asyncio.sleep(0.7)
-        except:
-            pass
-
-    await interaction.followup.send(
-        f"✅ Ekonomi başarıyla güncellendi.\n📨 DM gönderilen kişi: {dm_sayisi}",
-        ephemeral=True
-    )
-
-    # ================= GERİ =================
-    @discord.ui.button(
-        label="Geri",
-        custom_id="ekonomi_geri",
-        style=discord.ButtonStyle.secondary
-    )
+    @discord.ui.button(label="Geri", custom_id="ekonomi_geri", style=discord.ButtonStyle.secondary)
     async def geri(self, interaction: discord.Interaction, button: discord.ui.Button):
+
         await interaction.response.edit_message(
             embed=admin_main_embed(),
             view=AdminMainView()
