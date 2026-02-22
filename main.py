@@ -598,22 +598,21 @@ async def meslek_al(ctx, *, secim):
 
     await ctx.send(f"✅ {ctx.author.mention}, artık {secim} mesleğine sahipsin!")
 
-# Hesap bilgilerini gösterme komutu
 # =====================================================
-# 👤 HESAP KOMUTU (DÜZELTİLDİ)
+# 👤 HESAP KOMUTU (TÜM VARLIKLAR GÖSTERİR)
 # =====================================================
 
 @bot.command()
 async def hesap(ctx):
     user = get_user(ctx.author.id)
 
-    meslek = user.get("meslek", "İşsiz")
+    meslek = user.get("meslek", "Yok")
     maas = meslekler.get(meslek, {}).get("maas", 0)
     faiz = int(user.get("banka", 0) * 0.05)
 
     embed = discord.Embed(
         title="👤 Hesap Bilgilerin",
-        color=discord.Color.dark_blue()
+        color=discord.Color.blue()
     )
 
     embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
@@ -624,21 +623,20 @@ async def hesap(ctx):
     embed.add_field(name="💵 Günlük Maaş", value=formatla(maas), inline=False)
     embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=formatla(faiz), inline=False)
 
-    # 🔥 VARLIK LİSTESİ
-    tum_varliklar = ["Altın", "EwoPlusCoin", "Bitcoin", "Elmas", "Dolar", "Gümüş"]
-
-    yatirimlar_text = ""
+    # =========================
+    # 📦 VARLIKLAR (CASE FIX)
+    # =========================
     yatirimlar = user.get("yatirimlar", {})
+    text = ""
 
-    for varlik in tum_varliklar:
-        adet = yatirimlar.get(varlik, 0)
+    for varlik, adet in yatirimlar.items():
         if adet > 0:
-            yatirimlar_text += f"{varlik}: {adet} adet\n"
+            text += f"💎 {varlik.capitalize()}: {adet} adet\n"
 
-    if yatirimlar_text == "":
-        yatirimlar_text = "Yatırım yok."
+    if text == "":
+        text = "Yatırım yok."
 
-    embed.add_field(name="📦 Varlıkların", value=yatirimlar_text, inline=False)
+    embed.add_field(name="📦 Varlıkların", value=text, inline=False)
 
     await ctx.send(embed=embed)
 
@@ -851,52 +849,83 @@ async def help(ctx):
     await ctx.send("❌ Yanlış Komut! Lütfen `q!yardım` yazınız.")
 
 # ------------------- q!gzenginler & q!szenginler -------------------
+# =====================================================
+# 🌍 GLOBAL EwoPlusCoin ZENGİNLER
+# =====================================================
+
 @bot.command()
 async def gzenginler(ctx):
-    top_users = economy_col.find().sort("para", -1).limit(10)
+
+    top_users = economy_col.find().sort("yatirimlar.ewopluscoin", -1).limit(10)
 
     embed = discord.Embed(
-        title="🌍 Global En Zenginler",
+        title="🌍 Global EwoPlusCoin Zenginleri",
         color=discord.Color.gold()
     )
 
-    for i, user in enumerate(top_users, start=1):
+    sira = 1
+
+    for user in top_users:
+        miktar = user.get("yatirimlar", {}).get("ewopluscoin", 0)
+
+        if miktar <= 0:
+            continue
+
         try:
             uye = await bot.fetch_user(int(user["_id"]))
             embed.add_field(
-                name=f"{i}. {uye.name}",
-                value=f"💰 {user['para']}₺",
+                name=f"{sira}. {uye.name}",
+                value=f"💎 {miktar} EwoPlusCoin",
                 inline=False
             )
+            sira += 1
         except:
             continue
+
+    if sira == 1:
+        embed.description = "Henüz EwoPlusCoin sahibi kimse yok."
 
     await ctx.send(embed=embed)
 
-@tasks.loop(minutes=10)
-async def otomatik_zenginler():
-    kanal = bot.get_channel(1474500301758267565)
+# =====================================================
+# 🔁 10 DAKİKADA BİR GLOBAL EwoPlusCoin
+# =====================================================
 
+@tasks.loop(minutes=10)
+async def otomatik_gzenginler():
+
+    kanal = bot.get_channel(1474500301758267565)
     if not kanal:
         return
 
-    top_users = economy_col.find().sort("para", -1).limit(10)
+    top_users = economy_col.find().sort("yatirimlar.ewopluscoin", -1).limit(10)
 
     embed = discord.Embed(
-        title="🌍 Global En Zenginler",
+        title="🌍 Global EwoPlusCoin Zenginleri",
+        description="En çok EwoPlusCoin'e sahip 10 kişi",
         color=discord.Color.gold()
     )
 
-    for i, user in enumerate(top_users, start=1):
+    sira = 1
+
+    for user in top_users:
+        miktar = user.get("yatirimlar", {}).get("ewopluscoin", 0)
+
+        if miktar <= 0:
+            continue
+
         try:
             uye = await bot.fetch_user(int(user["_id"]))
             embed.add_field(
-                name=f"{i}. {uye.name}",
-                value=f"💰 {user['para']}₺",
+                name=f"{sira}. {uye.name}",
+                value=f"💎 {miktar} EwoPlusCoin",
                 inline=False
             )
+            sira += 1
         except:
             continue
+
+    embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
 
     await kanal.send(embed=embed)
 
@@ -2209,9 +2238,9 @@ async def on_ready():
         print("Durum değiştir loop başlatıldı")
         durum_degistir.start()
 
-    if not otomatik_zenginler.is_running():
+    if not otomatik_gzenginler.is_running():
         print("Global zenginler loop başlatıldı")
-        otomatik_zenginler.start()
+        otomatik_gzenginler.start()
 
     if not enflasyon_gonder.is_running():
         print("Enflasyon loop başlatıldı")
