@@ -7,6 +7,7 @@ import os
 from pymongo import MongoClient, ReturnDocument
 from flask import Flask
 from threading import Thread
+import pymongo
 
 # ================= MONGO =================
 
@@ -114,6 +115,10 @@ def get_user(user_id):
                 "para": 1000,
                 "banka": 0,
                 "meslek": "İşsiz",
+                "xp": 0,
+                "meslek": "İşsiz",
+		"son_maas": 0,
+		"son_gunluk": 0
                 "envanter": {
                     "Bronz Kasa": 0,
                     "Gümüş Kasa": 0,
@@ -238,6 +243,8 @@ async def paragönder(ctx, member: discord.Member, miktar: int):
 
     await ctx.send(f"✅ {member.mention} kişisine {formatla(miktar)} EwoCoin gönderildi")
 
+    await xp_ekle(ctx.author.id, 5)
+
 MAX_BET = 100000
 
 @bot.command()
@@ -285,6 +292,8 @@ async def cf(ctx, miktar: str):
         await ctx.send(f"🎉 Kazandın! +{formatla(kazanc)} EwoCoin")
     else:
         await ctx.send(f"💀 Kaybettin! -{formatla(miktar)} EwoCoin")
+
+	await xp_ekle(ctx.author.id, 5)
 
 # =====================================================
 # 🎰 SLOT KOMUTU (YENİ ORAN SİSTEMİ - FİNAL)
@@ -381,6 +390,111 @@ async def slot(ctx, miktar):
         text = "💀 Kaybettin."
 
     await msg.edit(content=f"{sonuc}\n{text}")
+
+    await xp_ekle(ctx.author.id, 5)
+
+#   XP SİSTEMİ
+def xp_gerekli(level):
+    return 100 + (level * 50)
+
+async def xp_ekle(user_id, miktar):
+    user = get_user(user_id)
+
+    yeni_xp = user["xp"] + miktar
+    level = user["level"]
+
+    gerekli = xp_gerekli(level)
+
+    if yeni_xp >= gerekli:
+        yeni_xp -= gerekli
+        level += 1
+
+    collection.update_one(
+        {"_id": str(user_id)},
+        {"$set": {"xp": yeni_xp, "level": level}}
+    )
+
+#      LEVEL KOMUTU
+@bot.command()
+async def level(ctx):
+    user = get_user(ctx.author.id)
+
+    gerekli = xp_gerekli(user["level"])
+    bar_uzunluk = 20
+
+    dolu = int((user["xp"] / gerekli) * bar_uzunluk)
+    bos = bar_uzunluk - dolu
+
+    bar = "🟩" * dolu + "⬜" * bos
+
+    embed = discord.Embed(
+        title="🏆 Kullanıcı Profili",
+        color=discord.Color.dark_blue()
+    )
+
+    embed.set_thumbnail(url=ctx.author.avatar.url)
+    embed.add_field(name="Level", value=user["level"], inline=True)
+    embed.add_field(name="XP", value=f"{user['xp']} / {gerekli}", inline=True)
+    embed.add_field(name="XP Bar", value=bar, inline=False)
+
+    await ctx.send(embed=embed)
+
+# MAAŞ 
+@bot.command()
+async def maaş(ctx):
+    user = get_user(ctx.author.id)
+
+    simdi = time.time()
+
+    if simdi - user.get("son_maas", 0) < 18000:
+        kalan = int(18000 - (simdi - user["son_maas"]))
+        return await ctx.send(f"⏳ Maaş için {kalan} saniye beklemelisin.")
+
+    meslek = user["meslek"]
+    maas = meslekler.get(meslek, {}).get("maas", 0)
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {"para": maas},
+            "$set": {"son_maas": simdi}
+        }
+    )
+
+    await xp_ekle(ctx.author.id, 5)
+
+    await ctx.send(f"💰 Maaşını aldın! +{formatla(maas)} EwoCoin")
+
+# gunluk 
+@bot.command()
+async def günlük(ctx):
+    user = get_user(ctx.author.id)
+
+    simdi = time.time()
+
+    if simdi - user.get("son_gunluk", 0) < 86400:
+        kalan = int(86400 - (simdi - user["son_gunluk"]))
+        return await ctx.send(f"⏳ Günlük için {kalan} saniye beklemelisin.")
+
+    temel = 1000
+    bonus = user["level"] * 250
+
+    odul = temel + bonus
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {"para": odul},
+            "$set": {"son_gunluk": simdi}
+        }
+    )
+
+    await xp_ekle(ctx.author.id, 10)
+
+    await ctx.send(f"🎁 Günlük ödülünü aldın! +{formatla(odul)} EwoCoin")
+
+
+
 
 # BANKA SİSTEMİ
 
@@ -657,25 +771,69 @@ async def hesap(ctx):
 @bot.command()
 @commands.cooldown(1, 60, commands.BucketType.user)
 async def dilen(ctx):
-    user = economy_col.find_one({"_id": str(ctx.author.id)})
+    user = get_user(ctx.author.id)
 
-    if not user:
-        economy_col.insert_one({
-            "_id": str(ctx.author.id),
-            "para": 0,
-            "banka": 0,
-            "varliklar": {}
-        })
-        user = economy_col.find_one({"_id": str(ctx.author.id)})
+    olay = random.random()
 
-    kazanilan = random.randint(100, 500)
+    if olay < 0.30:
+        ceza = 200
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": -ceza}}
+        )
+        await ctx.send("🚨 Zabıta yakaladı! 200 EwoCoin ceza kesildi.")
 
-    economy_col.update_one(
+    elif olay < 0.80:
+        kazanc = random.randint(5, 1000)
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": kazanc}}
+        )
+        await ctx.send(f"🙏 Dilenerek {formatla(kazanc)} kazandın.")
+
+    else:
+        kazanc = random.randint(1001, 10000)
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": kazanc}}
+        )
+        await ctx.send(f"🕴 Gizemli takım elbiseli adam {formatla(kazanc)} bıraktı!")
+
+    await xp_ekle(ctx.author.id, 5)
+
+# BLACK JACK
+
+@bot.command()
+@commands.cooldown(1, 10, commands.BucketType.user)
+async def blackjack(ctx, miktar: int):
+    user = get_user(ctx.author.id)
+
+    if miktar <= 0 or user["para"] < miktar:
+        return await ctx.send("❌ Geçersiz miktar.")
+
+    oyuncu = random.randint(15, 21)
+    bot_skor = random.randint(15, 21)
+
+    if oyuncu > bot_skor:
+        kazanc = miktar
+        sonuc = f"🎉 Kazandın! +{formatla(kazanc)}"
+    elif oyuncu < bot_skor:
+        kazanc = -miktar
+        sonuc = f"💀 Kaybettin! -{formatla(miktar)}"
+    else:
+        kazanc = 0
+        sonuc = "🤝 Berabere!"
+
+    collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$inc": {"para": kazanilan}}
+        {"$inc": {"para": kazanc}}
     )
 
-    await ctx.send(f"💰 {ctx.author.mention} dilenerek **{kazanilan}₺** kazandı!")
+    await xp_ekle(ctx.author.id, 25)
+
+    await ctx.send(
+        f"🃏 Sen: {oyuncu} | Bot: {bot_skor}\n{sonuc}"
+    )
 
 # ================== EKONOMİ KOMUTU ==================
 
@@ -1112,6 +1270,8 @@ async def soygun(ctx, member: discord.Member):
         )
 
     await ctx.send(sonuc)
+    
+    await xp_ekle(ctx.author.id, 20)
 
 # ------------------- ADMIN KOMUTLARI -------------------
 ADMIN_ID = 1271933410251772017
@@ -2197,6 +2357,8 @@ async def balıktut(ctx):
         await ctx.send(f"🎣 Olta sayesinde {balık} Balık tuttun! +{formatla(kazanc)}")
     else:
         await ctx.send(f"🎣 {balık} Balık tuttun! +{formatla(kazanc)}")
+	
+	await xp_ekle(ctx.author.id, 5)
 
 # kasa aç 
 @bot.command()
@@ -2259,6 +2421,8 @@ async def kasaaç(ctx, *, kasa_adi: str):
         f"🎁 {kasa_adi} açıldı!\n"
         f"💰 İçinden **{formatla(odul)} EwoCoin** çıktı!"
     )
+
+	await xp_ekle(ctx.author.id, 15)
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
 
