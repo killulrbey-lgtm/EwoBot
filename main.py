@@ -116,9 +116,9 @@ def get_user(user_id):
                 "banka": 0,
                 "meslek": "İşsiz",
                 "xp": 0,
-                "meslek": "İşsiz",
-		"son_maas": 0,
-		"son_gunluk": 0
+                "level": 1,
+                "son_maas": 0,
+                "son_gunluk": 0,
                 "envanter": {
                     "Bronz Kasa": 0,
                     "Gümüş Kasa": 0,
