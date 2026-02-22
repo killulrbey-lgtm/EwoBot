@@ -31,6 +31,24 @@ def bakim_aktif_mi():
         return False
     return data.get("aktif", False)
 
+# ================= FLASK KEEP ALIVE =================
+from flask import Flask
+from threading import Thread
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot aktif!"
+
+def run():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
 # ================= BOT =================
 
 intents = discord.Intents.default()
@@ -2392,8 +2410,6 @@ async def on_interaction(interaction: discord.Interaction):
         if interaction.data["custom_id"].startswith("ticket_cevap_"):
             user_id = int(interaction.data["custom_id"].split("_")[-1])
             await interaction.response.send_modal(TicketCevapModal(user_id))
-    
 
-if __name__ == "__main__":
-    TOKEN = os.getenv("TOKEN")
-    bot.run(TOKEN)
+keep_alive()
+bot.run(os.getenv("TOKEN"))
