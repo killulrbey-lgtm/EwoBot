@@ -273,6 +273,13 @@ async def cf(ctx, miktar: str):
     else:
         await ctx.send(f"💀 Kaybettin! -{formatla(miktar)} EwoCoin")
 
+# =====================================================
+# 🎰 SLOT KOMUTU (YENİ ORAN SİSTEMİ - FİNAL)
+# %20 = 3 aynı (x3)
+# %35 = 2 aynı (x2)
+# %45 = 1 eşleşme ( %70 kayıp / %30 iade )
+# =====================================================
+
 @bot.command()
 @commands.cooldown(1, 15, commands.BucketType.user)
 async def slot(ctx, miktar):
@@ -280,7 +287,7 @@ async def slot(ctx, miktar):
     user = get_user(ctx.author.id)
 
     # =========================
-    # MİKTAR KONTROL
+    # 💰 MİKTAR KONTROL
     # =========================
     if str(miktar).lower() == "all":
         miktar = user["para"]
@@ -300,7 +307,7 @@ async def slot(ctx, miktar):
         return await ctx.send("❌ Paran yetmiyor.")
 
     # =========================
-    # PARA DÜŞ
+    # 💸 PARAYI DÜŞ
     # =========================
     collection.update_one(
         {"_id": str(ctx.author.id)},
@@ -311,37 +318,45 @@ async def slot(ctx, miktar):
     await asyncio.sleep(2)
 
     emojis = ["🍒", "🍋", "🍉", "⭐"]
-    result = [random.choice(emojis) for _ in range(3)]
-    sonuc = " | ".join(result)
 
+    ihtimal = random.randint(1, 100)
     kazanc = 0
 
     # =========================
-    # KAZANMA ORANI AYARI
+    # 🎯 3 AYNI (%20)
     # =========================
-
-    sans = random.random()
-
-    # %12 ihtimal 3 aynı (x3)
-    if sans < 0.12:
-        result = [result[0]] * 3
+    if ihtimal <= 20:
+        sembol = random.choice(emojis)
+        result = [sembol, sembol, sembol]
         kazanc = miktar * 3
 
-    # %33 ihtimal 2 aynı (x2)
-    elif sans < 0.45:
+    # =========================
+    # 🎯 2 AYNI (%35)
+    # =========================
+    elif ihtimal <= 55:  # 20 + 35 = 55
         sembol = random.choice(emojis)
-        result = [sembol, sembol, random.choice(emojis)]
+        farkli = random.choice([e for e in emojis if e != sembol])
+        result = [sembol, sembol, farkli]
         random.shuffle(result)
         kazanc = miktar * 2
 
-    # %55 kayıp
+    # =========================
+    # 🎯 1 EŞLEŞME (%45)
+    # =========================
     else:
-        kazanc = 0
+        # tamamen karışık
+        result = random.sample(emojis, 3)
+
+        # %30 iade / %70 kayıp
+        if random.randint(1, 100) <= 30:
+            kazanc = miktar  # iade
+        else:
+            kazanc = 0
 
     sonuc = " | ".join(result)
 
     # =========================
-    # KAZANÇ EKLE
+    # 💵 KAZANÇ EKLE
     # =========================
     if kazanc > 0:
         collection.update_one(
@@ -353,7 +368,6 @@ async def slot(ctx, miktar):
         text = "💀 Kaybettin."
 
     await msg.edit(content=f"{sonuc}\n{text}")
-
 
 # BANKA SİSTEMİ
 
@@ -585,34 +599,41 @@ async def meslek_al(ctx, *, secim):
     await ctx.send(f"✅ {ctx.author.mention}, artık {secim} mesleğine sahipsin!")
 
 # Hesap bilgilerini gösterme komutu
+# =====================================================
+# 👤 HESAP KOMUTU (DÜZELTİLDİ)
+# =====================================================
+
 @bot.command()
 async def hesap(ctx):
     user = get_user(ctx.author.id)
 
-    meslek = user["meslek"]
-    maas = meslekler[meslek]["maas"]
-    faiz = int(user["banka"] * 0.05)
+    meslek = user.get("meslek", "İşsiz")
+    maas = meslekler.get(meslek, {}).get("maas", 0)
+    faiz = int(user.get("banka", 0) * 0.05)
 
     embed = discord.Embed(
         title="👤 Hesap Bilgilerin",
-        color=discord.Color.blue()
+        color=discord.Color.dark_blue()
     )
 
     embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
 
-    embed.add_field(name="💰 Nakit", value=formatla(user['para']), inline=False)
-    embed.add_field(name="🏦 Banka", value=formatla(user['banka']), inline=False)
+    embed.add_field(name="💰 Nakit", value=formatla(user.get("para", 0)), inline=False)
+    embed.add_field(name="🏦 Banka", value=formatla(user.get("banka", 0)), inline=False)
     embed.add_field(name="💼 Meslek", value=meslek, inline=False)
     embed.add_field(name="💵 Günlük Maaş", value=formatla(maas), inline=False)
     embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=formatla(faiz), inline=False)
 
-    # 🔥 YATIRIMLAR
+    # 🔥 VARLIK LİSTESİ
+    tum_varliklar = ["Altın", "EwoPlusCoin", "Bitcoin", "Elmas", "Dolar", "Gümüş"]
+
     yatirimlar_text = ""
-    for varlik, adet in user["yatirimlar"].items():
+    yatirimlar = user.get("yatirimlar", {})
+
+    for varlik in tum_varliklar:
+        adet = yatirimlar.get(varlik, 0)
         if adet > 0:
-            fiyat_data = economy_col.find_one({"_id": varlik})
-            fiyat = fiyat_data["current_price"] if fiyat_data else varsayilan_varlikler[varlik]
-            yatirimlar_text += f"{varlik}: {adet} adet (Güncel: {formatla(fiyat)})\n"
+            yatirimlar_text += f"{varlik}: {adet} adet\n"
 
     if yatirimlar_text == "":
         yatirimlar_text = "Yatırım yok."
@@ -683,34 +704,48 @@ async def ekonomi(ctx):
 
 # ================== SATINAL KOMUTU ==================
 
+# =====================================================
+# 💰 SATINAL KOMUTU (TÜM VARLIKLAR ÇALIŞIR)
+# =====================================================
+
 @bot.command()
-async def satınal(ctx, varlik: str, adet: int):
+async def satınal(ctx, varlik_adi: str, miktar: int):
+
     user = get_user(ctx.author.id)
 
-    varlik = varlik.capitalize()
+    varliklar = {
+        "altın": 50000,
+        "ewopluscoin": 500000,
+        "bitcoin": 240000,
+        "elmas": 80000,
+        "dolar": 4500,
+        "gümüş": 35000
+    }
 
-    fiyat_data = economy_col.find_one({"_id": varlik})
-    if not fiyat_data:
+    varlik_key = varlik_adi.lower()
+
+    if varlik_key not in varliklar:
         return await ctx.send("❌ Böyle bir varlık yok.")
 
-    fiyat = fiyat_data["current_price"]
-    toplam = fiyat * adet
+    fiyat = varliklar[varlik_key]
+    toplam = fiyat * miktar
 
     if user["para"] < toplam:
-        return await ctx.send("❌ Yetersiz bakiye.")
+        return await ctx.send("❌ Paran yetmiyor.")
 
-    user["para"] -= toplam
-    user["yatirimlar"][varlik] += adet
-
-    economy_col.update_one(
+    # Para düş
+    collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$set": {
-            "para": user["para"],
-            "yatirimlar": user["yatirimlar"]
-        }}
+        {"$inc": {"para": -toplam}}
     )
 
-    await ctx.send(f"✅ {adet} adet {varlik} satın alındı.")
+    # Yatırım ekle
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {f"yatirimlar.{varlik_adi.capitalize()}": miktar}}
+    )
+
+    await ctx.send(f"✅ {miktar} adet {varlik_adi.capitalize()} satın alındı.")
 
 # ================== SAT KOMUTU ==================
 
@@ -1594,22 +1629,24 @@ class AdminMainView(discord.ui.View):
         )
 
 # =====================================================
-# EKONOMİ VIEW
+# 💰 EKONOMİ VIEW (FAİZ + MAAŞ ÇALIŞIR)
 # =====================================================
 
 class EkonomiView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    # ==========================
-    # FAİZ YATIR
-    # ==========================
-    @discord.ui.button(label="Faiz Yatır (%5)", style=discord.ButtonStyle.primary, custom_id="faiz_yatir")
-    async def faiz(self, interaction: discord.Interaction, button: discord.ui.Button):
+    # 🔵 FAİZ YATIR
+    @discord.ui.button(label="Faiz Yatır (%5)", style=discord.ButtonStyle.primary)
+    async def faiz_yatir(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        for user in economy_col.find({"meslek": {"$exists": True}}):
-            faiz = int(user.get("banka", 0) * 0.05)
-            economy_col.update_one(
+        users = collection.find()
+
+        for user in users:
+            banka = user.get("banka", 0)
+            faiz = int(banka * 0.05)
+
+            collection.update_one(
                 {"_id": user["_id"]},
                 {"$inc": {"banka": faiz}}
             )
@@ -1621,6 +1658,7 @@ class EkonomiView(discord.ui.View):
             description="Tüm banka hesaplarına %5 faiz eklenmiştir.",
             color=discord.Color.dark_blue()
         )
+
         embed.set_thumbnail(url=bot.user.avatar.url)
         embed.set_footer(text="EwoBot Finans Sistemi")
 
@@ -1629,15 +1667,17 @@ class EkonomiView(discord.ui.View):
 
         await interaction.response.send_message("✅ Faiz yatırıldı.", ephemeral=True)
 
-    # ==========================
-    # MAAŞ YATIR
-    # ==========================
-    @discord.ui.button(label="Maaş Yatır", style=discord.ButtonStyle.primary, custom_id="maas_yatir")
-    async def maas(self, interaction: discord.Interaction, button: discord.ui.Button):
+    # 🔵 MAAŞ YATIR
+    @discord.ui.button(label="Maaş Yatır", style=discord.ButtonStyle.primary)
+    async def maas_yatir(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        for user in economy_col.find({"meslek": {"$exists": True}}):
-            maas = meslekler[user["meslek"]]["maas"]
-            economy_col.update_one(
+        users = collection.find()
+
+        for user in users:
+            meslek = user.get("meslek", "İşsiz")
+            maas = meslekler.get(meslek, {}).get("maas", 0)
+
+            collection.update_one(
                 {"_id": user["_id"]},
                 {"$inc": {"banka": maas}}
             )
@@ -1646,16 +1686,17 @@ class EkonomiView(discord.ui.View):
 
         embed = discord.Embed(
             title="💰 Maaş Ödemeleri Tamamlandı",
-            description="Tüm kullanıcıların maaş ödemeleri banka hesaplarına yatırılmıştır.",
+            description="Tüm kullanıcıların maaşları banka hesaplarına yatırılmıştır.",
             color=discord.Color.dark_blue()
         )
+
         embed.set_thumbnail(url=bot.user.avatar.url)
         embed.set_footer(text="EwoBot Finans Sistemi")
 
         if kanal:
             await kanal.send(embed=embed)
 
-        await interaction.response.send_message("✅ Maaşlar yatırıldı.", ephemeral=True)
+        await interaction.response.send_message("✅ Maaş yatırıldı.", ephemeral=True)
 
     # ==========================
     # EKONOMİ SIFIRLA
