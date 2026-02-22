@@ -2239,18 +2239,21 @@ async def kasaaç(ctx, *, kasa_adi: str):
 
 @bot.event
 async def on_ready():
-    otomatik_zenginler.start()
+    print(f"{bot.user} aktif!")
+
     bot.add_view(TicketPanelView())
 
-    # Loopları güvenli başlat
+    # Durum loop
     if not durum_degistir.is_running():
         print("Durum değiştir loop başlatıldı")
         durum_degistir.start()
 
+    # Global zenginler loop
     if not otomatik_gzenginler.is_running():
         print("Global zenginler loop başlatıldı")
         otomatik_gzenginler.start()
 
+    # Enflasyon loop
     if not enflasyon_gonder.is_running():
         print("Enflasyon loop başlatıldı")
         enflasyon_gonder.start()
