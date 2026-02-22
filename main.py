@@ -293,7 +293,7 @@ async def cf(ctx, miktar: str):
     else:
         await ctx.send(f"💀 Kaybettin! -{formatla(miktar)} EwoCoin")
 
-	await xp_ekle(ctx.author.id, 5)
+    await xp_ekle(ctx.author.id, 5)
 
 # =====================================================
 # 🎰 SLOT KOMUTU (YENİ ORAN SİSTEMİ - FİNAL)
@@ -2358,7 +2358,7 @@ async def balıktut(ctx):
     else:
         await ctx.send(f"🎣 {balık} Balık tuttun! +{formatla(kazanc)}")
 	
-	await xp_ekle(ctx.author.id, 5)
+    await xp_ekle(ctx.author.id, 5)
 
 # kasa aç 
 @bot.command()
