@@ -2168,9 +2168,9 @@ async def on_ready():
         print("Durum değiştir loop başlatıldı")
         durum_degistir.start()
 
-    if not global_zenginler_gonder.is_running():
+    if not otomatik_zenginler.is_running():
         print("Global zenginler loop başlatıldı")
-        global_zenginler_gonder.start()
+        otomatik_zenginler.start()
 
     if not enflasyon_gonder.is_running():
         print("Enflasyon loop başlatıldı")
