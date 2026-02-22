@@ -391,31 +391,33 @@ async def xp_ekle(user_id, miktar):
 #      LEVEL KOMUTU
 @bot.command()
 async def level(ctx):
+
     user = get_user(ctx.author.id)
 
-    gerekli = xp_gerekli(user["level"])
-    bar_uzunluk = 20
+    xp = user.get("xp", 0)
+    level = user.get("level", 1)
 
-    dolu = int((user["xp"] / gerekli) * bar_uzunluk)
-    bos = bar_uzunluk - dolu
+    gereken = level * 100
+    oran = int((xp / gereken) * 10)
 
-    bar = "🟩" * dolu + "⬜" * bos
+    bar = "🟩" * oran + "⬜" * (10 - oran)
 
     embed = discord.Embed(
         title="🏆 Kullanıcı Profili",
-        color=discord.Color.dark_blue()
+        color=discord.Color.gold()
     )
 
+    embed.add_field(name="Seviye", value=f"LVL {level}", inline=True)
+    embed.add_field(name="XP", value=f"{xp} / {gereken}", inline=True)
+    embed.add_field(name="İlerleme", value=bar, inline=False)
+
     embed.set_thumbnail(url=ctx.author.avatar.url)
-    embed.add_field(name="Level", value=user["level"], inline=True)
-    embed.add_field(name="XP", value=f"{user['xp']} / {gerekli}", inline=True)
-    embed.add_field(name="XP Bar", value=bar, inline=False)
 
     await ctx.send(embed=embed)
 
 # MAAŞ 
-@bot.command()
-async def maaş(ctx):
+@bot.command(name="maaş")
+async def maas(ctx):
 
     user = get_user(ctx.author.id)
     simdi = time.time()
@@ -424,34 +426,35 @@ async def maaş(ctx):
         kalan = int(18000 - (simdi - user["son_maas"]))
         return await ctx.send(f"⏳ Maaş için {kalan} saniye beklemelisin.")
 
-    meslek = user["meslek"]
-    maas = meslekler.get(meslek, {}).get("maas", 0)
+    meslek = user.get("meslek", "İşsiz")
+    maas_miktari = meslekler.get(meslek, {}).get("maas", 0)
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {
-            "$inc": {"para": maas},
+            "$inc": {"para": maas_miktari},
             "$set": {"son_maas": simdi}
         }
     )
 
     await xp_ekle(ctx.author.id, 5)
-    await ctx.send(f"💰 Maaşını aldın! +{formatla(maas)} EwoCoin")
+    await ctx.send(f"💰 Maaşını aldın! +{formatla(maas_miktari)} EwoCoin")
 
 # gunluk 
-@bot.command()
-async def günlük(ctx):
-    user = get_user(ctx.author.id)
+@bot.command(name="günlük")
+async def gunluk(ctx):
 
+    user = get_user(ctx.author.id)
     simdi = time.time()
 
     if simdi - user.get("son_gunluk", 0) < 86400:
         kalan = int(86400 - (simdi - user["son_gunluk"]))
         return await ctx.send(f"⏳ Günlük için {kalan} saniye beklemelisin.")
 
-    temel = 1000
-    bonus = user["level"] * 250
+    level = user.get("level", 1)
 
+    temel = 1000
+    bonus = level * 250
     odul = temel + bonus
 
     collection.update_one(
@@ -463,7 +466,6 @@ async def günlük(ctx):
     )
 
     await xp_ekle(ctx.author.id, 10)
-
     await ctx.send(f"🎁 Günlük ödülünü aldın! +{formatla(odul)} EwoCoin")
 
 
@@ -782,35 +784,82 @@ async def dilen(ctx):
 
 @bot.command()
 @commands.cooldown(1, 10, commands.BucketType.user)
-async def blackjack(ctx, miktar: int):
+async def blackjack(ctx, miktar: str):
+
+    MAX_BET = 100000
     user = get_user(ctx.author.id)
 
-    if miktar <= 0 or user["para"] < miktar:
-        return await ctx.send("❌ Geçersiz miktar.")
-
-    oyuncu = random.randint(15, 21)
-    bot_skor = random.randint(15, 21)
-
-    if oyuncu > bot_skor:
-        kazanc = miktar
-        sonuc = f"🎉 Kazandın! +{formatla(kazanc)}"
-    elif oyuncu < bot_skor:
-        kazanc = -miktar
-        sonuc = f"💀 Kaybettin! -{formatla(miktar)}"
+    # ALL sistemi
+    if miktar.lower() == "all":
+        miktar = min(user["para"], MAX_BET)
     else:
-        kazanc = 0
-        sonuc = "🤝 Berabere!"
+        if not miktar.isdigit():
+            return await ctx.send("❌ Geçerli bir miktar gir.")
 
+        miktar = int(miktar)
+
+    if miktar <= 0:
+        return await ctx.send("❌ Geçerli bir miktar gir.")
+
+    if miktar > MAX_BET:
+        return await ctx.send("❌ Blackjack'te maksimum 100.000 EwoCoin oynayabilirsin.")
+
+    if user["para"] < miktar:
+        return await ctx.send("❌ Yeterli paran yok.")
+
+    # Parayı düş
     collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$inc": {"para": kazanc}}
+        {"$inc": {"para": -miktar}}
     )
 
-    await xp_ekle(ctx.author.id, 25)
+    kartlar = [2,3,4,5,6,7,8,9,10,10,10,10,11]
 
-    await ctx.send(
-        f"🃏 Sen: {oyuncu} | Bot: {bot_skor}\n{sonuc}"
-    )
+    oyuncu = [random.choice(kartlar), random.choice(kartlar)]
+    bot_kart = [random.choice(kartlar), random.choice(kartlar)]
+
+    def toplam(el):
+        t = sum(el)
+        while t > 21 and 11 in el:
+            el[el.index(11)] = 1
+            t = sum(el)
+        return t
+
+    oyuncu_toplam = toplam(oyuncu)
+    bot_toplam = toplam(bot_kart)
+
+    # Bot kart çek
+    while bot_toplam < 17:
+        bot_kart.append(random.choice(kartlar))
+        bot_toplam = toplam(bot_kart)
+
+    mesaj = f"""
+🃏 **Blackjack**
+
+Sen: {oyuncu} → {oyuncu_toplam}
+Bot: {bot_kart} → {bot_toplam}
+"""
+
+    if oyuncu_toplam > 21:
+        sonuc = "💀 Battın! Kaybettin."
+    elif bot_toplam > 21 or oyuncu_toplam > bot_toplam:
+        kazanc = miktar * 2
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": kazanc}}
+        )
+        sonuc = f"🎉 Kazandın! +{formatla(kazanc)}"
+    elif oyuncu_toplam == bot_toplam:
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": miktar}}
+        )
+        sonuc = "🤝 Berabere! Paran iade edildi."
+    else:
+        sonuc = "💀 Kaybettin."
+
+    await xp_ekle(ctx.author.id, 5)
+    await ctx.send(mesaj + "\n" + sonuc)
 
 # ================== EKONOMİ KOMUTU ==================
 
