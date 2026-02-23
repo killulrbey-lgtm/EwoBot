@@ -2167,10 +2167,24 @@ class KanalView(discord.ui.View):
 
 @bot.check
 async def global_bakim_kontrol(ctx):
-    ayar = settings_col.find_one({"_id": "global"})
-    bakim = ayar.get("bakim_modu", False) if ayar else False
-    if bakim and ctx.author.id != ADMIN_ID:
+
+    data = settings_col.find_one({"_id": "global"})
+
+    if data and data.get("bakim_modu"):
+
+        # İstersen sadece adminler kullanabilsin
+        if ctx.author.guild_permissions.administrator:
+            return True
+
+        embed = discord.Embed(
+            title="🛠 EwoBot Bakımda",
+            description="Şu anda komut kullanamazsınız!\nLütfen bakımın bitmesini bekleyin.",
+            color=discord.Color.red()
+        )
+
+        await ctx.send(embed=embed)
         return False
+
     return True
 
 
@@ -2178,7 +2192,7 @@ class BakimView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Bakım Başlat", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="🛠 Bakım Başlat", style=discord.ButtonStyle.danger)
     async def baslat(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         settings_col.update_one(
@@ -2202,7 +2216,8 @@ class BakimView(discord.ui.View):
 
         await interaction.response.send_message("✅ Bakım başlatıldı.", ephemeral=True)
 
-    @discord.ui.button(label="Bakım Bitir", style=discord.ButtonStyle.success)
+
+    @discord.ui.button(label="✅ Bakım Bitir", style=discord.ButtonStyle.success)
     async def bitir(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         settings_col.update_one(
@@ -2216,7 +2231,7 @@ class BakimView(discord.ui.View):
         embed = discord.Embed(
             title="✅ EwoBot Bakım Tamamlandı",
             description="@everyone\nBakım modu kapatıldı.\nArtık herkes komutları kullanabilir.",
-            color=discord.Color.dark_blue()
+            color=discord.Color.green()
         )
         embed.set_thumbnail(url=bot.user.avatar.url)
         embed.set_footer(text="EwoBot Sistem Bildirimi")
@@ -2226,7 +2241,8 @@ class BakimView(discord.ui.View):
 
         await interaction.response.send_message("✅ Bakım kapatıldı.", ephemeral=True)
 
-    @discord.ui.button(label="Geri", style=discord.ButtonStyle.secondary)
+
+    @discord.ui.button(label="🔙 Geri", style=discord.ButtonStyle.secondary)
     async def geri(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=admin_main_embed(), view=AdminMainView())
 
