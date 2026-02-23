@@ -645,7 +645,7 @@ q!davet → Botu sunucuna ekle
     banka_button = Button(label="🏦 Banka", style=discord.ButtonStyle.blurple)
     meslek_button = Button(label="💼 Meslek", style=discord.ButtonStyle.gray)
     isletme_button = Button(label="🏭 İşletmeler", style=discord.ButtonStyle.green)
-    diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)async def isletme_callback(interaction):
+    diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
     await interaction.response.edit_message(embed=isletme_embed, view=view)
 
     # Callbackler
