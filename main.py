@@ -909,82 +909,133 @@ async def ekonomi(ctx):
 # =====================================================
 # 💰 SATINAL KOMUTU (TÜM VARLIKLAR ÇALIŞIR)
 # =====================================================
-
 @bot.command()
 async def satınal(ctx, varlik_adi: str, miktar: int):
 
+    if miktar <= 0:
+        return await ctx.send("❌ Miktar 1 veya daha büyük olmalı.")
+
     user = get_user(ctx.author.id)
 
-    varliklar = {
-        "altın": 50000,
-        "ewopluscoin": 500000,
-        "bitcoin": 240000,
-        "elmas": 80000,
-        "dolar": 4500,
-        "gümüş": 35000
+    # Varsayılan fiyatlar
+    varsayilan_varlikler = {
+        "Altın": 50000,
+        "Ewopluscoin": 500000,
+        "Bitcoin": 240000,
+        "Elmas": 80000,
+        "Dolar": 4500,
+        "Gümüş": 35000
     }
 
-    varlik_key = varlik_adi.lower()
+    # Kullanıcı input düzeltme
+    varlik_input = varlik_adi.lower()
 
-    if varlik_key not in varliklar:
+    varlik_map = {
+        "altın": "Altın",
+        "altin": "Altın",
+        "ewopluscoin": "Ewopluscoin",
+        "ewoplus": "Ewopluscoin",
+        "bitcoin": "Bitcoin",
+        "elmas": "Elmas",
+        "dolar": "Dolar",
+        "gümüş": "Gümüş",
+        "gumus": "Gümüş"
+    }
+
+    if varlik_input not in varlik_map:
         return await ctx.send("❌ Böyle bir varlık yok.")
 
-    fiyat = varliklar[varlik_key]
+    varlik = varlik_map[varlik_input]
+
+    # Güncel fiyatı database'den çek
+    veri = economy_col.find_one({"_id": varlik})
+
+    if veri:
+        fiyat = veri.get("current_price", varsayilan_varlikler[varlik])
+    else:
+        fiyat = varsayilan_varlikler[varlik]
+        economy_col.update_one(
+            {"_id": varlik},
+            {"$set": {"current_price": fiyat}},
+            upsert=True
+        )
+
     toplam = fiyat * miktar
 
     if user["para"] < toplam:
         return await ctx.send("❌ Paran yetmiyor.")
 
-    # Para düş
+    # Parayı düş
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": -toplam}}
     )
 
-    # Yatırım ekle
+    # Yatırımı ekle
     collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$inc": {f"yatirimlar.{varlik_adi.capitalize()}": miktar}}
+        {"$inc": {f"yatirimlar.{varlik}": miktar}}
     )
 
-    await ctx.send(f"✅ {miktar} adet {varlik_adi.capitalize()} satın alındı.")
+    await ctx.send(
+        f"✅ {miktar} adet {varlik} satın alındı.\n"
+        f"💰 Birim fiyat: {fiyat:,}\n"
+        f"💸 Toplam: {toplam:,}"
+    )
 
 # ================== SAT KOMUTU ==================
 
-@bot.command(name="sat")
-async def varlik_sat(ctx, varlik: str, miktar: int):
+@bot.command()
+async def sat(ctx, varlik_adi: str, miktar: int):
 
     if miktar <= 0:
         return await ctx.send("❌ Miktar 1 veya daha büyük olmalı.")
 
-    varlik = varlik.capitalize()
+    user = get_user(ctx.author.id)
 
-    if varlik not in varsayilan_varlikler:
+    varlik_adi = varlik_adi.lower()
+
+    varlik_map = {
+        "altın": "Altın",
+        "altin": "Altın",
+        "bitcoin": "Bitcoin",
+        "ewopluscoin": "Ewopluscoin",
+        "ewoplus": "Ewopluscoin",
+        "elmas": "Elmas",
+        "dolar": "Dolar",
+        "gümüş": "Gümüş",
+        "gumus": "Gümüş"
+    }
+
+    if varlik_adi not in varlik_map:
         return await ctx.send("❌ Geçersiz varlık adı.")
 
-    user = get_user(ctx.author.id)
-    sahip = user.get("yatirim", {}).get(varlik, 0)
+    varlik = varlik_map[varlik_adi]
+
+    sahip = user.get("yatirimlar", {}).get(varlik, 0)
 
     if sahip < miktar:
-        return await ctx.send("❌ Yeterli varlığa sahip değilsin.")
+        return await ctx.send("❌ Bu kadar varlığın yok.")
 
+    # DATABASE'DEN GÜNCEL FİYAT
     veri = economy_col.find_one({"_id": varlik})
-    fiyat = veri["current_price"] if veri else varsayilan_varlikler[varlik]
+    fiyat = veri["current_price"]
 
-    toplam_kazanc = fiyat * miktar
+    toplam = fiyat * miktar
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {
             "$inc": {
-                "para": toplam_kazanc,
-                f"yatirim.{varlik}": -miktar
+                "para": toplam,
+                f"yatirimlar.{varlik}": -miktar
             }
         }
     )
 
     await ctx.send(
-        f"✅ {miktar} adet **{varlik}** sattın.\n💰 Kazanç: {formatla(toplam_kazanc)}"
+        f"✅ {miktar} {varlik} satıldı!\n"
+        f"💰 Kazanç: {formatla(toplam)}"
     )
 
 # ------------------- Cooldown hata mesajı --------------------
