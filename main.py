@@ -558,7 +558,7 @@ q!satınal <varlık> <miktar> → Varlık satın alır
 q!sat <varlık> <miktar> → Varlık satar
 q!ekonomi → Ekonomi durumunu gösterir
 q!dilen → Dilenme komutu
-q!günlük → Günlük paranızı verir
+q!gunluk → Günlük paranızı verir
 q!maaş → Maaşınızı yatırır
 """,
         color=discord.Color.green()
@@ -2038,7 +2038,7 @@ class EkonomiView(discord.ui.View):
             data = economy_col.find_one({"_id": varlik})
             eski = data["current_price"]
 
-            degisim = random.uniform(-0.20, 0.20)  # -%20 +%20
+            degisim = random.uniform(-0.20, 0.20)
             yeni = int(eski * (1 + degisim))
 
             economy_col.update_one(
@@ -2046,11 +2046,21 @@ class EkonomiView(discord.ui.View):
                 {"$set": {"current_price": yeni}}
             )
 
-            emoji = "🟢" if yeni > eski else "🔴"
+            fark = yeni - eski
+
+            if fark > 0:
+                emoji = "🟢"
+                baslik = f"{emoji} {varlik} (Toplam +{formatla(fark)} arttı)"
+            elif fark < 0:
+                emoji = "🔴"
+                baslik = f"{emoji} {varlik} (Toplam -{formatla(abs(fark))} indi)"
+            else:
+                emoji = "⚪"
+                baslik = f"{emoji} {varlik} (Değişim yok)"
 
             embed.add_field(
-                name=f"{emoji} {varlik}",
-                value=f"Eski: {formatla(eski)} → Yeni: {formatla(yeni)}",
+                name=baslik,
+                value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni)}",
                 inline=False
             )
 
