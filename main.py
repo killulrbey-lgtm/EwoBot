@@ -1114,13 +1114,22 @@ durum_degistir.counter = 0
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def davet(ctx):
-    view = View()
-    invite_button = Button(
-        label="Uygulamayı Ekle",
-        url="https://discord.com/oauth2/authorize?client_id=1471843858101960776&permissions=8&scope=bot"
+
+    invite_link = "https://discord.com/oauth2/authorize?client_id=1475533273160618204&permissions=2147863616&scope=bot%20applications.commands"
+
+    view = discord.ui.View()
+
+    invite_button = discord.ui.Button(
+        label="🤖 Botu Sunucuna Ekle",
+        url=invite_link
     )
+
     view.add_item(invite_button)
-    await ctx.send("Botu sunucuna eklemek için aşağıdaki butona tıkla:", view=view)
+
+    await ctx.send(
+        "Botu sunucuna eklemek için aşağıdaki butona tıkla:",
+        view=view
+    )
 
 # ------------------- GLOBAL / SUNUCU ÖZEL AYARLARI -------------------
 DESTEK_SUNUCU_ID = 1471843922115301493
