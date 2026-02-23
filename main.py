@@ -557,7 +557,7 @@ from discord.ui import View, Button
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def yardım(ctx):
-    # Embedler kategorilere göre
+
     ekonomi_embed = discord.Embed(
         title="💰 Ekonomi Komutları",
         description="""
@@ -603,12 +603,11 @@ q!meslekler → Meslekleri listeler
 q!meslek al <meslek> → Meslek satın al
 """,
         color=discord.Color.purple()
-    ) 
-     
+    )
 
     isletme_embed = discord.Embed(
-    title="🏭 İşletme Komutları",
-    description="""
+        title="🏭 İşletme Komutları",
+        description="""
 q!işletmeler → Tüm işletmeleri gösterir
 q!işletmeal <isim> <miktar> → İşletme satın al
 q!işletmeyükselt <isim> → İşletmeni yükselt
@@ -616,8 +615,8 @@ q!işletmeparaçek → Biriken geliri toplar
 q!işletmetop → Global en büyük sanayiciler
 q!sigorta → 24 saatlik sigorta al
 """,
-    color=discord.Color.dark_teal()
-)
+        color=discord.Color.dark_teal()
+    )
 
     diger_embed = discord.Embed(
         title="📊 Diğer Komutlar",
@@ -626,29 +625,26 @@ q!gzenginler → Global en zenginler
 q!szenginler → Sunucudaki en zenginler
 q!soygun → Başka kullanıcıyı soygun yap
 q!enflasyon → Toplam EwoCoin miktarı
-q!kasaaç <Kasaadi> → Kasalarınızdan birisini açar
-q!market → Satılan Ürünleri gösterir ve almanızı sağlar
-q!envanter → Satın aldığınız ürünleri gösterir
+q!kasaaç <Kasaadi> → Kasa açar
+q!market → Marketi gösterir
+q!envanter → Envanteri gösterir
 q!davet → Botu sunucuna ekle
 """,
         color=discord.Color.blurple()
     )
 
-    # Footer
-    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, diger_embed, isletme_embed]:
+    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, diger_embed]:
         e.set_footer(text="EwoBot Yardım Menüsü")
 
-    # Butonlar
-    view = View()
+    view = View(timeout=None)
+
     ekonomi_button = Button(label="💰 Ekonomi", style=discord.ButtonStyle.green)
     kumar_button = Button(label="🎲 Kumar", style=discord.ButtonStyle.red)
     banka_button = Button(label="🏦 Banka", style=discord.ButtonStyle.blurple)
     meslek_button = Button(label="💼 Meslek", style=discord.ButtonStyle.gray)
     isletme_button = Button(label="🏭 İşletmeler", style=discord.ButtonStyle.green)
     diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
-    await interaction.response.edit_message(embed=isletme_embed, view=view)
 
-    # Callbackler
     async def ekonomi_callback(interaction):
         await interaction.response.edit_message(embed=ekonomi_embed, view=view)
 
@@ -662,19 +658,18 @@ q!davet → Botu sunucuna ekle
         await interaction.response.edit_message(embed=meslek_embed, view=view)
 
     async def isletme_callback(interaction):
-       await interaction.response.edit_message(embed=isletme_embed, view=view)
+        await interaction.response.edit_message(embed=isletme_embed, view=view)
 
     async def diger_callback(interaction):
         await interaction.response.edit_message(embed=diger_embed, view=view)
 
-    # Callbackleri ata
     ekonomi_button.callback = ekonomi_callback
     kumar_button.callback = kumar_callback
     banka_button.callback = banka_callback
     meslek_button.callback = meslek_callback
+    isletme_button.callback = isletme_callback
     diger_button.callback = diger_callback
 
-    # Butonları ekle
     view.add_item(ekonomi_button)
     view.add_item(kumar_button)
     view.add_item(banka_button)
@@ -765,9 +760,6 @@ async def hesap(ctx):
     embed.add_field(name="💵 Günlük Maaş", value=formatla(maas), inline=False)
     embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=formatla(faiz), inline=False)
 
-    # =========================
-    # 📦 VARLIKLAR (CASE FIX)
-    # =========================
     yatirimlar = user.get("yatirimlar", {})
     text = ""
 
@@ -779,6 +771,23 @@ async def hesap(ctx):
         text = "Yatırım yok."
 
     embed.add_field(name="📦 Varlıkların", value=text, inline=False)
+
+    # -------------------
+    # 🏭 İŞLETMELER
+    # -------------------
+
+    isletme_text = ""
+    for isim, veri in user.get("isletmeler", {}).items():
+        adet = veri.get("adet", 0)
+        level = veri.get("level", 1)
+
+        if adet > 0:
+            isletme_text += f"🏭 {isim} x{adet} (Lv.{level})\n"
+
+    if isletme_text == "":
+        isletme_text = "İşletmen yok."
+
+    embed.add_field(name="🏭 İşletmelerin", value=isletme_text, inline=False)
 
     await ctx.send(embed=embed)
 
@@ -2565,54 +2574,57 @@ async def işletmeler(ctx):
 
     embed.add_field(
         name="🪨 Maden",
-        value="Fiyat: 300.000\nSaatlik: 6.000",
+        value="Fiyat: 300.000\nSaatlik: 6.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
 
     embed.add_field(
         name="🌾 Çiftlik",
-        value="Fiyat: 450.000\nSaatlik: 9.000",
+        value="Fiyat: 450.000\nSaatlik: 9.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
 
     embed.add_field(
         name="🏨 Otel",
-        value="Fiyat: 900.000\nSaatlik: 20.000",
+        value="Fiyat: 900.000\nSaatlik: 20.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
 
     embed.add_field(
         name="🏭 Fabrika",
-        value="Fiyat: 2.000.000\nSaatlik: 45.000",
+        value="Fiyat: 2.000.000\nSaatlik: 45.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
 
     embed.add_field(
         name="🏦 Banka Şubesi",
-        value="Fiyat: 3.500.000\nSaatlik: 75.000",
+        value="Fiyat: 3.500.000\nSaatlik: 75.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
 
     embed.add_field(
         name="🚢 Liman",
-        value="Fiyat: 5.000.000\nSaatlik: 110.000",
+        value="Fiyat: 5.000.000\nSaatlik: 110.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
 
     embed.add_field(
         name="🏢 Şirket",
-        value="Fiyat: 8.000.000\nSaatlik: 180.000",
+        value="Fiyat: 8.000.000\nSaatlik: 180.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
 
     embed.add_field(
         name="👑 Holding",
-        value="Fiyat: 12.000.000\nSaatlik: 300.000",
+        value="Fiyat: 12.000.000\nSaatlik: 300.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
 
     embed.set_thumbnail(url=bot.user.avatar.url)
-    embed.set_footer(text="EwoBot İşletme Sistemi")
+
+    embed.set_footer(
+        text="🔼 Örnek: Maden Lv1→2 = 120k | Lv2→3 = 240k | Level arttıkça maliyet artar."
+    )
 
     await ctx.send(embed=embed)
 
@@ -2709,27 +2721,32 @@ async def işletmeal(ctx, isim: str, miktar: int = 1):
     await ctx.send(f"🏭 {miktar} adet {isim} satın alındı!")
 
 @bot.command()
-async def işletmeyükselt(ctx, isim: str):
+async def işletmeyükselt(ctx, *, isim: str):
 
     isim = isim.lower()
     user = get_user(ctx.author.id)
 
-    veri = user.get("isletmeler", {}).get(isim)
-
-    if not veri:
+    if "isletmeler" not in user or isim not in user["isletmeler"]:
         return await ctx.send("❌ Bu işletmeye sahip değilsin.")
 
+    veri = user["isletmeler"][isim]
     level = veri.get("level", 1)
 
-    if level >= 5:
-        return await ctx.send("⚠ Maksimum level (5).")
+    if isim not in ISLETMELER:
+        return await ctx.send("❌ Geçersiz işletme.")
 
-    # Level arttıkça maliyet artar
-    maliyet = int(ISLETMELER[isim]["fiyat"] * 0.40 * level)
+    temel_fiyat = ISLETMELER[isim]["fiyat"]
 
-    if user["para"] < maliyet:
-        return await ctx.send("❌ Paran yetmiyor.")
+    # 🔼 Yükseltme maliyeti formülü
+    maliyet = int(temel_fiyat * 0.40 * level)
 
+    if user.get("para", 0) < maliyet:
+        return await ctx.send(
+            f"❌ Yetersiz bakiye.\n"
+            f"Gerekli: {formatla(maliyet)}"
+        )
+
+    # Level arttır
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {
@@ -2740,7 +2757,41 @@ async def işletmeyükselt(ctx, isim: str):
         }
     )
 
-    await ctx.send(f"📈 {isim} Level {level+1} oldu! (%10 gelir artışı)")
+    yeni_level = level + 1
+
+    embed = discord.Embed(
+        title="🔼 İşletme Yükseltildi!",
+        color=discord.Color.green()
+    )
+
+    embed.add_field(
+        name="🏭 İşletme",
+        value=isim.capitalize(),
+        inline=False
+    )
+
+    embed.add_field(
+        name="📊 Yeni Level",
+        value=f"Level {yeni_level}",
+        inline=False
+    )
+
+    embed.add_field(
+        name="💸 Ödenen",
+        value=formatla(maliyet),
+        inline=False
+    )
+
+    embed.add_field(
+        name="📈 Gelir Artışı",
+        value="%10 arttı",
+        inline=False
+    )
+
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    embed.set_footer(text="Level arttıkça yükseltme maliyeti artar.")
+
+    await ctx.send(embed=embed)
 
 import time
 
