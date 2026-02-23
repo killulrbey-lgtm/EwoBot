@@ -77,6 +77,17 @@ bot = commands.Bot(
     help_command=None        # 🔥 Default help kapalı
 )
 
+ISLETMELER = {
+    "maden": {"fiyat": 300000, "gelir": 6000},
+    "ciftlik": {"fiyat": 450000, "gelir": 9000},
+    "otel": {"fiyat": 900000, "gelir": 20000},
+    "fabrika": {"fiyat": 2000000, "gelir": 45000},
+    "bankasubesi": {"fiyat": 3500000, "gelir": 75000},
+    "liman": {"fiyat": 5000000, "gelir": 110000},
+    "sirket": {"fiyat": 8000000, "gelir": 180000},
+    "holding": {"fiyat": 12000000, "gelir": 300000}
+}
+
 # ================= TEST KOMUT =================
 
 @bot.command()
@@ -592,7 +603,21 @@ q!meslekler → Meslekleri listeler
 q!meslek al <meslek> → Meslek satın al
 """,
         color=discord.Color.purple()
-    )
+    ) 
+     
+
+    isletme_embed = discord.Embed(
+    title="🏭 İşletme Komutları",
+    description="""
+q!işletmeler → Tüm işletmeleri gösterir
+q!işletmeal <isim> <miktar> → İşletme satın al
+q!işletmeyükselt <isim> → İşletmeni yükselt
+q!işletmeparaçek → Biriken geliri toplar
+q!işletmetop → Global en büyük sanayiciler
+q!sigorta → 24 saatlik sigorta al
+""",
+    color=discord.Color.dark_teal()
+)
 
     diger_embed = discord.Embed(
         title="📊 Diğer Komutlar",
@@ -610,7 +635,7 @@ q!davet → Botu sunucuna ekle
     )
 
     # Footer
-    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, diger_embed]:
+    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, diger_embed, isletme_embed]:
         e.set_footer(text="EwoBot Yardım Menüsü")
 
     # Butonlar
@@ -619,7 +644,9 @@ q!davet → Botu sunucuna ekle
     kumar_button = Button(label="🎲 Kumar", style=discord.ButtonStyle.red)
     banka_button = Button(label="🏦 Banka", style=discord.ButtonStyle.blurple)
     meslek_button = Button(label="💼 Meslek", style=discord.ButtonStyle.gray)
-    diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
+    isletme_button = Button(label="🏭 İşletmeler", style=discord.ButtonStyle.green)
+    diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)async def isletme_callback(interaction):
+    await interaction.response.edit_message(embed=isletme_embed, view=view)
 
     # Callbackler
     async def ekonomi_callback(interaction):
@@ -633,6 +660,9 @@ q!davet → Botu sunucuna ekle
 
     async def meslek_callback(interaction):
         await interaction.response.edit_message(embed=meslek_embed, view=view)
+
+    async def isletme_callback(interaction):
+       await interaction.response.edit_message(embed=isletme_embed, view=view)
 
     async def diger_callback(interaction):
         await interaction.response.edit_message(embed=diger_embed, view=view)
@@ -649,6 +679,7 @@ q!davet → Botu sunucuna ekle
     view.add_item(kumar_button)
     view.add_item(banka_button)
     view.add_item(meslek_button)
+    view.add_item(isletme_button)
     view.add_item(diger_button)
 
     await ctx.send(embed=ekonomi_embed, view=view)
@@ -1051,8 +1082,14 @@ from discord.ext import tasks
 async def durum_degistir():
     # Sunucu sayısı
     sunucu_sayisi = len(bot.guilds)
-    # Tüm sunuculardaki kullanıcı sayısı
-    oyuncu_sayisi = sum(guild.member_count for guild in bot.guilds)
+
+    # Tüm sunuculardaki benzersiz kullanıcı sayısı
+    tum_uyeler = set()
+    for guild in bot.guilds:
+        for uye in guild.members:
+            tum_uyeler.add(uye.id)
+
+    oyuncu_sayisi = len(tum_uyeler)
 
     # 2 farklı durum
     if durum_degistir.counter % 2 == 0:
@@ -1064,7 +1101,6 @@ async def durum_degistir():
 
 # Sayaç başlat
 durum_degistir.counter = 0
-
 # ------ BOT EKLEME İCİN -----------
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
@@ -2516,6 +2552,313 @@ async def kasaaç(ctx, *, kasa_adi: str):
     )
 
     await xp_ekle(ctx.author.id, 15)
+
+# İŞLETME SİSTEMİ
+@bot.command()
+async def işletmeler(ctx):
+
+    embed = discord.Embed(
+        title="🏭 Aktif İşletmeler",
+        description="Pasif gelir sağlayan tüm işletmeler aşağıdadır:",
+        color=discord.Color.dark_teal()
+    )
+
+    embed.add_field(
+        name="🪨 Maden",
+        value="Fiyat: 300.000\nSaatlik: 6.000",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🌾 Çiftlik",
+        value="Fiyat: 450.000\nSaatlik: 9.000",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🏨 Otel",
+        value="Fiyat: 900.000\nSaatlik: 20.000",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🏭 Fabrika",
+        value="Fiyat: 2.000.000\nSaatlik: 45.000",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🏦 Banka Şubesi",
+        value="Fiyat: 3.500.000\nSaatlik: 75.000",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🚢 Liman",
+        value="Fiyat: 5.000.000\nSaatlik: 110.000",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🏢 Şirket",
+        value="Fiyat: 8.000.000\nSaatlik: 180.000",
+        inline=False
+    )
+
+    embed.add_field(
+        name="👑 Holding",
+        value="Fiyat: 12.000.000\nSaatlik: 300.000",
+        inline=False
+    )
+
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    embed.set_footer(text="EwoBot İşletme Sistemi")
+
+    await ctx.send(embed=embed)
+
+# işletme top
+@bot.command()
+async def işletmetop(ctx):
+
+    users = collection.find()
+    siralama = []
+
+    for user in users:
+        isletmeler = user.get("isletmeler", {})
+        toplam_deger = 0
+
+        for isim, veri in isletmeler.items():
+            adet = veri.get("adet", 0)
+            level = veri.get("level", 1)
+
+            if isim not in ISLETMELER:
+                continue
+
+            fiyat = ISLETMELER[isim]["fiyat"]
+
+            # Gerçek şirket değeri hesabı
+            deger = adet * fiyat * (1 + (level - 1) * 0.20)
+            toplam_deger += deger
+
+        siralama.append((user["_id"], int(toplam_deger)))
+
+    siralama = sorted(siralama, key=lambda x: x[1], reverse=True)[:10]
+
+    embed = discord.Embed(
+        title="🏆 Global En Büyük Sanayiciler",
+        color=discord.Color.gold()
+    )
+
+    for i, (uid, deger) in enumerate(siralama, start=1):
+        uye = bot.get_user(int(uid))
+        isim = uye.name if uye else "Bilinmeyen"
+
+        embed.add_field(
+            name=f"#{i} {isim}",
+            value=f"Toplam İşletme Değeri: {formatla(deger)}",
+            inline=False
+        )
+
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    embed.set_footer(text="EwoBot Global İşletme Sıralaması")
+
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def işletmeal(ctx, isim: str, miktar: int = 1):
+
+    isim = isim.lower()
+    user = get_user(ctx.author.id)
+
+    if isim not in ISLETMELER:
+        return await ctx.send("❌ Geçersiz işletme.")
+
+    if miktar <= 0:
+        return await ctx.send("❌ Miktar 1 veya büyük olmalı.")
+
+    fiyat = ISLETMELER[isim]["fiyat"] * miktar
+
+    if user["para"] < fiyat:
+        return await ctx.send("❌ Paran yetmiyor.")
+
+    # Eğer işletme yoksa level=1 oluştur
+    if isim not in user.get("isletmeler", {}):
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {
+                "$inc": {
+                    "para": -fiyat,
+                    f"isletmeler.{isim}.adet": miktar
+                },
+                "$set": {
+                    f"isletmeler.{isim}.level": 1
+                }
+            }
+        )
+    else:
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {
+                "$inc": {
+                    "para": -fiyat,
+                    f"isletmeler.{isim}.adet": miktar
+                }
+            }
+        )
+
+    await ctx.send(f"🏭 {miktar} adet {isim} satın alındı!")
+
+@bot.command()
+async def işletmeyükselt(ctx, isim: str):
+
+    isim = isim.lower()
+    user = get_user(ctx.author.id)
+
+    veri = user.get("isletmeler", {}).get(isim)
+
+    if not veri:
+        return await ctx.send("❌ Bu işletmeye sahip değilsin.")
+
+    level = veri.get("level", 1)
+
+    if level >= 5:
+        return await ctx.send("⚠ Maksimum level (5).")
+
+    # Level arttıkça maliyet artar
+    maliyet = int(ISLETMELER[isim]["fiyat"] * 0.40 * level)
+
+    if user["para"] < maliyet:
+        return await ctx.send("❌ Paran yetmiyor.")
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {
+                "para": -maliyet,
+                f"isletmeler.{isim}.level": 1
+            }
+        }
+    )
+
+    await ctx.send(f"📈 {isim} Level {level+1} oldu! (%10 gelir artışı)")
+
+import time
+
+@bot.command()
+async def sigorta(ctx):
+
+    user = get_user(ctx.author.id)
+    simdi = int(time.time())
+
+    if user.get("sigorta_bitis", 0) > simdi:
+        return await ctx.send("🛡 Sigorta zaten aktif.")
+
+    fiyat = 500000
+
+    if user["para"] < fiyat:
+        return await ctx.send("❌ Paran yetmiyor.")
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {"para": -fiyat},
+            "$set": {"sigorta_bitis": simdi + 86400}
+        }
+    )
+
+    await ctx.send("🛡 24 saatlik sigorta aktif edildi!")
+
+
+@bot.command()
+async def işletmeparaçek(ctx):
+
+    user = get_user(ctx.author.id)
+    simdi = int(time.time())
+
+    son = user.get("son_isletme_toplama", 0)
+
+    if son == 0:
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$set": {"son_isletme_toplama": simdi}}
+        )
+        return await ctx.send("⏳ İlk kayıt oluşturuldu. Gelir 1 saat sonra oluşacak.")
+
+    saat = (simdi - son) // 3600
+
+    if saat <= 0:
+        return await ctx.send("⏳ Henüz gelir oluşmadı.")
+
+    # 🔥 MAX 24 SAAT LİMİT
+    if saat > 24:
+        saat = 24
+
+    toplam = 0
+
+    for isim, veri in user.get("isletmeler", {}).items():
+        adet = veri.get("adet", 0)
+        level = veri.get("level", 1)
+
+        if isim not in ISLETMELER:
+            continue
+
+        base = ISLETMELER[isim]["gelir"]
+        gelir = int(base * adet * saat * (1 + (level - 1) * 0.10))
+        toplam += gelir
+
+    if toplam <= 0:
+        return await ctx.send("❌ İşletmen yok.")
+
+    sigorta = user.get("sigorta_bitis", 0) > simdi
+    sans = random.randint(1, 100)
+
+    if sigorta:
+        if sans <= 88:
+            mesaj = "💰 İşletmeler sorunsuz çalıştı!"
+            net = toplam
+        elif sans <= 98:
+            zarar = int(toplam * 0.20)
+            net = toplam - zarar
+            mesaj = f"⚠ Küçük kriz yaşandı! -{formatla(zarar)}"
+        else:
+            zarar = int(toplam * 0.40)
+            net = toplam - zarar
+            mesaj = f"🔥 Büyük kriz yaşandı! -{formatla(zarar)}"
+    else:
+        if sans <= 80:
+            mesaj = "💰 İşletmeler sorunsuz çalıştı!"
+            net = toplam
+        elif sans <= 95:
+            zarar = int(toplam * 0.25)
+            net = toplam - zarar
+            mesaj = f"⚠ Çalışanlar zam istedi! -{formatla(zarar)}"
+        else:
+            zarar = int(toplam * 0.50)
+            net = toplam - zarar
+            mesaj = f"🔥 Büyük kriz yaşandı! -{formatla(zarar)}"
+
+    if net < 0:
+        net = 0
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {"para": net},
+            "$set": {"son_isletme_toplama": simdi}
+        }
+    )
+
+    embed = discord.Embed(
+        title="🏭 İşletme Geliri Toplandı",
+        description=f"{mesaj}\n\n🕒 Hesaplanan Süre: {saat} saat (max 24)\n💰 Net Kazanç: {formatla(net)}",
+        color=discord.Color.green()
+    )
+
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    embed.set_footer(text="EwoBot İşletme Sistemi")
+
+    await ctx.send(embed=embed)
+
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
 
