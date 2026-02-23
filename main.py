@@ -95,12 +95,12 @@ def formatla(sayi):
     return f"{int(sayi):,}".replace(",", ".")
 
 varsayilan_varlikler = {
-    "Altın": 50000,
-    "EwoPlusCoin": 500000,
-    "Bitcoin": 240000,
-    "Elmas": 80000,
-    "Dolar": 4500,
-    "Gümüş": 35000
+    "altın": 50000,
+    "ewopluscoin": 500000,
+    "bitcoin": 240000,
+    "elmas": 80000,
+    "dolar": 4500,
+    "gümüş": 35000
 }
 
 from pymongo import ReturnDocument
@@ -131,12 +131,12 @@ def get_user(user_id):
                     "Olta": 0
                 },
                 "yatirimlar": {
-                    "Altın": 0,
-                    "EwoPlusCoin": 0,
-                    "Bitcoin": 0,
-                    "Elmas": 0,
-                    "Dolar": 0,
-                    "Gümüş": 0
+                    "altın": 0,
+                    "ewopluscoin": 0,
+                    "bitcoin": 0,
+                    "elmas": 0,
+                    "dolar": 0,
+                    "gümüş": 0
                 }
             }
         },
@@ -742,7 +742,7 @@ async def hesap(ctx):
 
     for varlik, adet in yatirimlar.items():
         if adet > 0:
-            text += f"💎 {varlik.capitalize()}: {adet} adet\n"
+            text += f"💎 {varlik.title()}: {adet} adet\n"
 
     if text == "":
         text = "Yatırım yok."
@@ -917,37 +917,11 @@ async def satınal(ctx, varlik_adi: str, miktar: int):
 
     user = get_user(ctx.author.id)
 
-    # Varsayılan fiyatlar
-    varsayilan_varlikler = {
-        "Altın": 50000,
-        "Ewopluscoin": 500000,
-        "Bitcoin": 240000,
-        "Elmas": 80000,
-        "Dolar": 4500,
-        "Gümüş": 35000
-    }
+    varlik = varlik_adi.lower()
 
-    # Kullanıcı input düzeltme
-    varlik_input = varlik_adi.lower()
-
-    varlik_map = {
-        "altın": "Altın",
-        "altin": "Altın",
-        "ewopluscoin": "Ewopluscoin",
-        "ewoplus": "Ewopluscoin",
-        "bitcoin": "Bitcoin",
-        "elmas": "Elmas",
-        "dolar": "Dolar",
-        "gümüş": "Gümüş",
-        "gumus": "Gümüş"
-    }
-
-    if varlik_input not in varlik_map:
+    if varlik not in varsayilan_varlikler:
         return await ctx.send("❌ Böyle bir varlık yok.")
 
-    varlik = varlik_map[varlik_input]
-
-    # Güncel fiyatı database'den çek
     veri = economy_col.find_one({"_id": varlik})
 
     if veri:
@@ -965,16 +939,14 @@ async def satınal(ctx, varlik_adi: str, miktar: int):
     if user["para"] < toplam:
         return await ctx.send("❌ Paran yetmiyor.")
 
-    # Parayı düş
     collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$inc": {"para": -toplam}}
-    )
-
-    # Yatırımı ekle
-    collection.update_one(
-        {"_id": str(ctx.author.id)},
-        {"$inc": {f"yatirimlar.{varlik}": miktar}}
+        {
+            "$inc": {
+                "para": -toplam,
+                f"yatirimlar.{varlik}": miktar
+            }
+        }
     )
 
     await ctx.send(
@@ -993,33 +965,18 @@ async def sat(ctx, varlik_adi: str, miktar: int):
 
     user = get_user(ctx.author.id)
 
-    varlik_adi = varlik_adi.lower()
+    varlik = varlik_adi.lower()
 
-    varlik_map = {
-        "altın": "Altın",
-        "altin": "Altın",
-        "bitcoin": "Bitcoin",
-        "ewopluscoin": "Ewopluscoin",
-        "ewoplus": "Ewopluscoin",
-        "elmas": "Elmas",
-        "dolar": "Dolar",
-        "gümüş": "Gümüş",
-        "gumus": "Gümüş"
-    }
-
-    if varlik_adi not in varlik_map:
+    if varlik not in varsayilan_varlikler:
         return await ctx.send("❌ Geçersiz varlık adı.")
-
-    varlik = varlik_map[varlik_adi]
 
     sahip = user.get("yatirimlar", {}).get(varlik, 0)
 
     if sahip < miktar:
         return await ctx.send("❌ Bu kadar varlığın yok.")
 
-    # DATABASE'DEN GÜNCEL FİYAT
     veri = economy_col.find_one({"_id": varlik})
-    fiyat = veri["current_price"]
+    fiyat = veri.get("current_price", varsayilan_varlikler[varlik])
 
     toplam = fiyat * miktar
 
@@ -1034,8 +991,8 @@ async def sat(ctx, varlik_adi: str, miktar: int):
     )
 
     await ctx.send(
-        f"✅ {miktar} {varlik} satıldı!\n"
-        f"💰 Kazanç: {formatla(toplam)}"
+        f"✅ {miktar} adet {varlik} satıldı.\n"
+        f"💰 Kazanç: {toplam:,}"
     )
 
 # ------------------- Cooldown hata mesajı --------------------
@@ -2535,6 +2492,28 @@ async def on_interaction(interaction: discord.Interaction):
         if interaction.data["custom_id"].startswith("ticket_cevap_"):
             user_id = int(interaction.data["custom_id"].split("_")[-1])
             await interaction.response.send_modal(TicketCevapModal(user_id))
+
+@bot.event
+async def on_ready():
+    print("🔥 EwoPlusCoin FIX başlıyor...")
+
+    for user in collection.find():
+        yat = user.get("yatirimlar", {})
+
+        if "EwoPlusCoin" in yat:
+            miktar = yat["EwoPlusCoin"]
+
+            collection.update_one(
+                {"_id": user["_id"]},
+                {
+                    "$inc": {"yatirimlar.ewopluscoin": miktar},
+                    "$unset": {"yatirimlar.EwoPlusCoin": ""}
+                }
+            )
+
+            print(f"Düzeltildi: {user['_id']}")
+
+    print("✅ FIX tamamlandı.")
 
 keep_alive()
 bot.run(os.getenv("TOKEN"))
