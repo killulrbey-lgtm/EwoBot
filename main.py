@@ -2382,6 +2382,121 @@ class AdminMainView(discord.ui.View):
 # =====================================================
 # 💰 EKONOMİ VIEW (FAİZ + MAAŞ ÇALIŞIR)
 # =====================================================
+ekonomi_gecici_veri = {}
+
+class EkonomiDegistirModal1(discord.ui.Modal, title="Ekonomi Güncelle (1/2)"):
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        self.varliklar = list(varsayilan_varlikler.keys())
+        self.ilk_bes = self.varliklar[:5]
+
+        for varlik in self.ilk_bes:
+            data = economy_col.find_one({"_id": varlik})
+            eski = data["current_price"] if data else 0
+
+            self.add_item(
+                discord.ui.TextInput(
+                    label=f"{varlik} (Eski: {formatla(eski)})",
+                    default=str(eski),
+                    required=True
+                )
+            )
+
+    async def on_submit(self, interaction: discord.Interaction):
+
+        ekonomi_gecici_veri[interaction.user.id] = {}
+
+        for i, varlik in enumerate(self.ilk_bes):
+            try:
+                yeni = int(self.children[i].value.replace(".", "").replace(",", ""))
+                ekonomi_gecici_veri[interaction.user.id][varlik] = yeni
+            except:
+                return await interaction.response.send_message(
+                    f"❌ {varlik} için geçersiz sayı girdiniz.",
+                    ephemeral=True
+                )
+
+        await interaction.response.send_modal(EkonomiDegistirModal2())
+
+class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        self.varlik = list(varsayilan_varlikler.keys())[5]
+
+        data = economy_col.find_one({"_id": self.varlik})
+        eski = data["current_price"] if data else 0
+
+        self.add_item(
+            discord.ui.TextInput(
+                label=f"{self.varlik} (Eski: {formatla(eski)})",
+                default=str(eski),
+                required=True
+            )
+        )
+
+    async def on_submit(self, interaction: discord.Interaction):
+
+        try:
+            yeni = int(self.children[0].value.replace(".", "").replace(",", ""))
+            ekonomi_gecici_veri[interaction.user.id][self.varlik] = yeni
+        except:
+            return await interaction.response.send_message(
+                f"❌ Geçersiz sayı girdiniz.",
+                ephemeral=True
+            )
+
+        kanal = bot.get_channel(EKONOMI_LOG_KANAL)
+
+        embed = discord.Embed(
+            title="📊 EwoEkonomi Güncellendi!",
+            color=discord.Color.dark_blue()
+        )
+
+        for varlik, yeni_fiyat in ekonomi_gecici_veri[interaction.user.id].items():
+
+            eski_data = economy_col.find_one({"_id": varlik})
+            eski = eski_data["current_price"] if eski_data else 0
+
+            economy_col.update_one(
+                {"_id": varlik},
+                {"$set": {"current_price": yeni_fiyat}},
+                upsert=True
+            )
+
+            fark = yeni_fiyat - eski
+
+            if fark > 0:
+                emoji = "🟢"
+                baslik = f"{emoji} {varlik} (Toplam +{formatla(fark)} arttı)"
+            elif fark < 0:
+                emoji = "🔴"
+                baslik = f"{emoji} {varlik} (Toplam -{formatla(abs(fark))} indi)"
+            else:
+                emoji = "⚪"
+                baslik = f"{emoji} {varlik} (Değişim yok)"
+
+            embed.add_field(
+                name=baslik,
+                value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni_fiyat)}",
+                inline=False
+            )
+
+        embed.set_thumbnail(url=bot.user.avatar.url)
+        embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
+
+        if kanal:
+            await kanal.send(embed=embed)
+
+        ekonomi_gecici_veri.pop(interaction.user.id, None)
+
+        await interaction.response.send_message(
+            "✅ Ekonomi manuel olarak güncellendi.",
+            ephemeral=True
+        )
 
 class EkonomiView(discord.ui.View):
     def __init__(self):
@@ -2469,51 +2584,7 @@ class EkonomiView(discord.ui.View):
     # ==========================
     @discord.ui.button(label="Ekonomi Değiştir", style=discord.ButtonStyle.success, custom_id="ekonomi_degistir")
     async def degistir(self, interaction: discord.Interaction, button: discord.ui.Button):
-
-        kanal = bot.get_channel(1474499591238848555)
-
-        embed = discord.Embed(
-            title="📊 EwoEkonomi Güncellendi!",
-            color=discord.Color.dark_blue()
-        )
-
-        for varlik in varsayilan_varlikler.keys():
-            data = economy_col.find_one({"_id": varlik})
-            eski = data["current_price"]
-
-            degisim = random.uniform(-0.20, 0.20)
-            yeni = int(eski * (1 + degisim))
-
-            economy_col.update_one(
-                {"_id": varlik},
-                {"$set": {"current_price": yeni}}
-            )
-
-            fark = yeni - eski
-
-            if fark > 0:
-                emoji = "🟢"
-                baslik = f"{emoji} {varlik} (Toplam +{formatla(fark)} arttı)"
-            elif fark < 0:
-                emoji = "🔴"
-                baslik = f"{emoji} {varlik} (Toplam -{formatla(abs(fark))} indi)"
-            else:
-                emoji = "⚪"
-                baslik = f"{emoji} {varlik} (Değişim yok)"
-
-            embed.add_field(
-                name=baslik,
-                value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni)}",
-                inline=False
-            )
-
-        embed.set_thumbnail(url=bot.user.avatar.url)
-        embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
-
-        if kanal:
-            await kanal.send(embed=embed)
-
-        await interaction.response.send_message("✅ Ekonomi değiştirildi.", ephemeral=True)
+        await interaction.response.send_modal(EkonomiDegistirModal1())
 
     # ==========================
     # GERİ
