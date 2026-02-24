@@ -628,6 +628,8 @@ q!enflasyon → Toplam EwoCoin miktarı
 q!kasaaç <Kasaadi> → Kasa açar
 q!market → Marketi gösterir
 q!envanter → Envanteri gösterir
+q!evlen @kullanıcı → Evlilik teklifi gönderir
+q!boşan → Evliliği bitirir
 q!davet → Botu sunucuna ekle
 """,
         color=discord.Color.blurple()
@@ -2527,7 +2529,7 @@ async def envanter(ctx):
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
     embed.set_footer(text="💡 Marketten yeni eşyalar alarak envanterini genişletebilirsin.")
 
-    await ctx.send(embed=embed)yüzük
+    await ctx.send(embed=embed)
 
 # balık tutma 
 @bot.command()
