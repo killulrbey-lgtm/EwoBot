@@ -55,8 +55,10 @@ def keep_alive():
 # ================= BOT =================
 
 intents = discord.Intents.default()
+intents.guilds = True
 intents.members = True
 intents.message_content = True
+intents.invites = True  # ÖNEMLİ
 
 def get_prefix(bot, message):
     prefixes = [
@@ -87,6 +89,8 @@ ISLETMELER = {
     "sirket": {"fiyat": 8000000, "gelir": 180000},
     "holding": {"fiyat": 12000000, "gelir": 300000}
 }
+
+invite_cache = {}
 
 # ================= TEST KOMUT =================
 
@@ -2045,6 +2049,17 @@ async def logpanel(ctx):
 
     await ctx.send("⚙️ Admin Log Paneli", view=view)
 
+# ===============================
+# YENİ INVITE OLUŞURSA CACHE GÜNCELLE
+# ===============================
+@bot.event
+async def on_invite_create(invite):
+    try:
+        invites = await invite.guild.invites()
+        invite_cache[invite.guild.id] = invites
+    except Exception as e:
+        print(f"Invite güncelleme hatası: {e}")
+
 MILESTONES = {
     25: 5000,
     50: 10000,
@@ -2058,6 +2073,9 @@ MILESTONE_KANAL = 1474728861920137276
 BOT_LOG_KANAL = 1474500594554372247
 
 
+# =====================================================
+# SUNUCUYA EKLENİNCE
+# =====================================================
 @bot.event
 async def on_guild_join(guild):
     await bot.wait_until_ready()
@@ -2065,99 +2083,105 @@ async def on_guild_join(guild):
     toplam = len(bot.guilds)
     print(f"Yeni sunucu: {guild.name} | Toplam: {toplam}")
 
-    # ✅ HER SUNUCU EKLENİNCE LOG
+    inviter = "Bilinmiyor"
+
+    # 🔎 Invite Tracking
+    try:
+        new_invites = await guild.invites()
+        old_invites = invite_cache.get(guild.id, [])
+
+        for new_inv in new_invites:
+            for old_inv in old_invites:
+                if new_inv.code == old_inv.code and new_inv.uses > old_inv.uses:
+                    inviter = f"{new_inv.inviter} ({new_inv.inviter.id})"
+
+        invite_cache[guild.id] = new_invites
+
+    except Exception as e:
+        print(f"Invite kontrol hatası: {e}")
+
+    # 👑 Owner
+    try:
+        owner = guild.owner
+        owner_text = f"{owner} ({owner.id})"
+    except:
+        owner_text = "Bilinmiyor"
+
+    icon_url = guild.icon.url if guild.icon else None
+
+    # =================================================
+    # LOG EMBED
+    # =================================================
     log_kanal = bot.get_channel(BOT_LOG_KANAL)
+
     if log_kanal:
-        try:
-            embed = discord.Embed(
-                title="✅ EwoBot Yeni Sunucuya Eklendi",
-                color=discord.Color.green()
-            )
-            embed.add_field(name="Sunucu", value=guild.name, inline=False)
-            embed.add_field(name="Sunucu ID", value=guild.id, inline=False)
-            embed.add_field(name="Toplam Sunucu", value=toplam, inline=False)
+        embed = discord.Embed(
+            title="✅ EwoBot Yeni Sunucuya Eklendi",
+            color=discord.Color.green()
+        )
 
-            await log_kanal.send(embed=embed)
-        except Exception as e:
-            print(f"Log gönderme hatası: {e}")
-    else:
-        print("BOT_LOG_KANAL bulunamadı veya cache'de değil.")
+        embed.add_field(name="📌 Sunucu", value=guild.name, inline=False)
+        embed.add_field(name="🆔 Sunucu ID", value=guild.id, inline=False)
+        embed.add_field(name="👥 Üye Sayısı", value=guild.member_count, inline=False)
+        embed.add_field(name="👑 Sunucu Sahibi", value=owner_text, inline=False)
+        embed.add_field(name="🚀 Botu Ekleyen", value=inviter, inline=False)
+        embed.add_field(name="📊 Toplam Sunucu", value=toplam, inline=False)
 
-    # ✅ MILESTONE KONTROL
+        if icon_url:
+            embed.set_thumbnail(url=icon_url)
+
+        await log_kanal.send(embed=embed)
+
+    # =================================================
+    # MILESTONE SİSTEMİ
+    # =================================================
     milestone_kanal = bot.get_channel(MILESTONE_KANAL)
-
     if not milestone_kanal:
-        print("Milestone kanalı bulunamadı.")
         return
 
-    # Sistem verisi
-    data = settings_col.find_one({"_id": "milestone_system"}) or {
-        "last_reached": 0
-    }
-
+    data = settings_col.find_one({"_id": "milestone_system"}) or {"last_reached": 0}
     last_reached = data.get("last_reached", 0)
 
-    # Eğer yeni bir rekor kırıldıysa
     if toplam > last_reached:
-
         for hedef, odul in sorted(MILESTONES.items()):
-
             if last_reached < hedef <= toplam:
 
                 print(f"🎯 Milestone tetiklendi: {hedef}")
 
                 try:
-                    # 🎁 Ödül yatır
                     result = collection.update_many({}, {"$inc": {"banka": odul}})
-                    print(f"Ödül yatırıldı: {result.modified_count} kullanıcı")
+                    print(f"{result.modified_count} kullanıcıya ödül verildi")
                 except Exception as e:
-                    print(f"Ödül yatırma hatası: {e}")
+                    print("Ödül yatırma hatası:", e)
 
-                # SON 20 SUNUCU
-                guild_list = [g.name for g in bot.guilds]
-
-                if len(guild_list) > 20:
-                    son_yirmi = guild_list[-20:]
-                    goster = "\n".join(son_yirmi)
-                    kalan = len(guild_list) - 20
-                    sunucu_yazi = f"{goster}\n\n+{kalan} daha..."
-                else:
-                    sunucu_yazi = "\n".join(guild_list)
-
-                embed = discord.Embed(
+                milestone_embed = discord.Embed(
                     title=f"🚀 EWO BOT ARTIK {hedef} SUNUCUDA!",
                     description=(
-                        "Botumuz aşağıdaki sunucularda aktif olarak kullanılıyor!\n\n"
-                        f"{sunucu_yazi}\n\n"
-                        "💚 Botumuzu sunucusuna ekleyen herkese teşekkür ederiz!\n"
+                        f"💚 Destekleyen herkese teşekkürler!\n\n"
                         f"🎁 Tüm kullanıcılara {odul:,} EwoCoin hediye edildi!"
                     ),
                     color=discord.Color.gold()
                 )
 
-                embed.set_footer(text="EwoBot Milestone Sistemi")
+                await milestone_kanal.send(embed=milestone_embed)
 
-                try:
-                    await milestone_kanal.send(embed=embed)
-                except Exception as e:
-                    print(f"Milestone mesaj hatası: {e}")
-
-                # last_reached güncelle
                 settings_col.update_one(
                     {"_id": "milestone_system"},
                     {"$set": {"last_reached": hedef}},
                     upsert=True
                 )
 
-        print("Milestone kontrol tamamlandı.")
 
-
+# =====================================================
+# SUNUCUDAN ÇIKINCA
+# =====================================================
 @bot.event
 async def on_guild_remove(guild):
 
+    invite_cache.pop(guild.id, None)
+
     kanal = bot.get_channel(BOT_LOG_KANAL)
     if not kanal:
-        print("BOT_LOG_KANAL bulunamadı.")
         return
 
     embed = discord.Embed(
@@ -2169,10 +2193,10 @@ async def on_guild_remove(guild):
     embed.add_field(name="Sunucu ID", value=guild.id, inline=False)
     embed.add_field(name="Kalan Sunucu Sayısı", value=len(bot.guilds), inline=False)
 
-    try:
-        await kanal.send(embed=embed)
-    except Exception as e:
-        print(f"Sunucudan çıkış log hatası: {e}")
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+
+    await kanal.send(embed=embed)
 
 # Mesaj silme
 @bot.event
@@ -3662,14 +3686,16 @@ async def rozetler(ctx):
 
     await ctx.send(embed=embed)
 
-
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
 
+# =====================================================
+# BOT READY
+# =====================================================
 @bot.event
 async def on_ready():
 
     if getattr(bot, "ready_once", False):
-        return  # tekrar tetiklenmesini engeller
+        return
 
     bot.ready_once = True
 
@@ -3678,7 +3704,15 @@ async def on_ready():
     print(f"Sunucu sayısı: {len(bot.guilds)}")
     print("===================================")
 
-    # Persistent View (Ticket vs varsa)
+    # Invite cache doldur
+    for guild in bot.guilds:
+        try:
+            invites = await guild.invites()
+            invite_cache[guild.id] = invites
+        except Exception as e:
+            print(f"Invite cache hatası ({guild.name}): {e}")
+
+    # Persistent View
     try:
         bot.add_view(TicketPanelView())
         print("TicketPanelView yüklendi")
@@ -3687,29 +3721,25 @@ async def on_ready():
 
     await bot.wait_until_ready()
 
-    # ================= DURUM LOOP =================
+    # Looplar
     try:
         if not durum_degistir.is_running():
             durum_degistir.start()
-            print("Durum değiştir loop başlatıldı")
     except Exception as e:
         print("Durum loop hatası:", e)
 
-    # ================= GLOBAL ZENGİNLER LOOP =================
     try:
         if not otomatik_gzenginler.is_running():
             otomatik_gzenginler.start()
-            print("Global zenginler loop başlatıldı")
     except Exception as e:
         print("Global zenginler loop hatası:", e)
 
-    # ================= ENFLASYON LOOP =================
     try:
         if not enflasyon_gonder.is_running():
             enflasyon_gonder.start()
-            print("Enflasyon loop başlatıldı")
     except Exception as e:
         print("Enflasyon loop hatası:", e)
+
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
