@@ -753,7 +753,6 @@ from discord.ui import View, Button
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def yardım(ctx):
 
-    # 💰 EKONOMİ
     ekonomi_embed = discord.Embed(
         title="💰 Ekonomi Komutları",
         description="""
@@ -761,101 +760,101 @@ q!param → Paranızı gösterir
 q!paragönder @kişi miktar → Para gönderir
 q!hesap → Hesap bilgilerinizi gösterir
 q!level → Level & XP gösterir
-q!satınal <varlık> <miktar> → Varlık satın alır
-q!sat <varlık> <miktar> → Varlık satar
-q!ekonomi → Ekonomi durumunu gösterir
-q!dilen → Dilenme komutu
-q!gunluk → Günlük paranızı verir
-q!maaş → Maaşınızı yatırır
+q!satınal <varlık> <miktar>
+q!sat <varlık> <miktar>
+q!ekonomi
+q!dilen
+q!gunluk
+q!maaş
 """,
         color=discord.Color.green()
     )
 
-    # 🎲 KUMAR
     kumar_embed = discord.Embed(
         title="🎲 Kumar Komutları",
         description="""
-q!cf miktar → Yazı tura
-q!balıktut → Balık oyunu
-q!slot miktar → Slot oyunu
-q!blackjack miktar → Blackjack
+q!cf miktar
+q!balıktut
+q!slot miktar
+q!blackjack miktar
 """,
         color=discord.Color.red()
     )
 
-    # 🏦 BANKA
     banka_embed = discord.Embed(
         title="🏦 Banka Komutları",
         description="""
-q!banka → Banka hesabını gösterir
-q!bankayatır miktar → Bankaya para yatır
-q!bankaçek miktar → Bankadan para çek
+q!banka
+q!bankayatır miktar
+q!bankaçek miktar
 """,
         color=discord.Color.gold()
     )
 
-    # 💼 MESLEK
     meslek_embed = discord.Embed(
         title="💼 Meslek Komutları",
         description="""
-q!meslekler → Meslekleri listeler
-q!meslek al <meslek> → Meslek satın al
+q!meslekler
+q!meslek al <meslek>
 """,
         color=discord.Color.purple()
     )
 
-    # 🏭 İŞLETME
     isletme_embed = discord.Embed(
         title="🏭 İşletme Komutları",
         description="""
-q!işletmeler → Tüm işletmeleri gösterir
-q!işletmeal <isim> <miktar> → İşletme satın al
-q!işletmeyükselt <isim> → İşletmeni yükselt
-q!işletmeparaçek → Geliri toplar
-q!işletmetop → Global sıralama
-q!sigorta → 24 saatlik sigorta
+q!işletmeler
+q!işletmeal <isim> <miktar>
+q!işletmeyükselt <isim>
+q!işletmeparaçek
+q!işletmetop
+q!sigorta
 """,
         color=discord.Color.dark_teal()
     )
 
-    # 🏅 ROZET & GÖREV
-    rozet_gorev_embed = discord.Embed(
+    rozet_embed = discord.Embed(
         title="🏅 Rozetler & Görevler",
         description="""
-🎯 Görev Komutları:
-q!göreval → Rastgele zor görev alır
-q!görevler → Aktif görevini gösterir
+🎯 Görev:
+q!göreval
+q!görevler
 
-🏅 Rozet Komutları:
-q!rozetler → Tüm rozetleri ve kazanma şartlarını gösterir
-q!rozetlerim → Sahip olduğun rozetleri gösterir
-q!hesaprozetekle <rozet adı> → Hesapta görünecek rozeti seçer
+🏅 Rozet:
+q!rozetler
+q!rozetlerim
+q!hesaprozetekle <rozet adı>
 """,
         color=discord.Color.orange()
     )
 
-    # 📊 DİĞER
     diger_embed = discord.Embed(
-        title="📊 Diğer Komutlar",
+        title="📊 Diğer",
         description="""
-q!gzenginler → Global en zenginler
-q!szenginler → Sunucu en zenginler
-q!soygun → Kullanıcı soygun
-q!enflasyon → Toplam EwoCoin
-q!kasaaç <KasaAdi> → Kasa aç
-q!market → Marketi gösterir
-q!envanter → Envanteri gösterir
-q!evlen @kullanıcı → Evlilik teklifi
-q!boşan → Servetin %5'i tazminat öder
-q!davet → Botu ekle
+q!gzenginler
+q!szenginler
+q!soygun
+q!enflasyon
+q!kasaaç <KasaAdi>
+q!market
+q!envanter
+q!evlen @kullanıcı
+q!boşan
+q!davet
 """,
         color=discord.Color.blurple()
     )
 
-    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, rozet_gorev_embed, diger_embed]:
+    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, rozet_embed, diger_embed]:
         e.set_footer(text="EwoBot Yardım Menüsü")
 
-    view = View(timeout=None)
+    view = View(timeout=120)
+
+    async def change_embed(interaction, embed):
+        if interaction.response.is_done():
+            await interaction.followup.edit_message(interaction.message.id, embed=embed, view=view)
+        else:
+            await interaction.response.edit_message(embed=embed, view=view)
 
     ekonomi_button = Button(label="💰 Ekonomi", style=discord.ButtonStyle.green)
     kumar_button = Button(label="🎲 Kumar", style=discord.ButtonStyle.red)
@@ -865,34 +864,13 @@ q!davet → Botu ekle
     rozet_button = Button(label="🏅 Rozet & Görev", style=discord.ButtonStyle.orange)
     diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
 
-    async def ekonomi_callback(interaction):
-        await interaction.response.edit_message(embed=ekonomi_embed, view=view)
-
-    async def kumar_callback(interaction):
-        await interaction.response.edit_message(embed=kumar_embed, view=view)
-
-    async def banka_callback(interaction):
-        await interaction.response.edit_message(embed=banka_embed, view=view)
-
-    async def meslek_callback(interaction):
-        await interaction.response.edit_message(embed=meslek_embed, view=view)
-
-    async def isletme_callback(interaction):
-        await interaction.response.edit_message(embed=isletme_embed, view=view)
-
-    async def rozet_callback(interaction):
-        await interaction.response.edit_message(embed=rozet_gorev_embed, view=view)
-
-    async def diger_callback(interaction):
-        await interaction.response.edit_message(embed=diger_embed, view=view)
-
-    ekonomi_button.callback = ekonomi_callback
-    kumar_button.callback = kumar_callback
-    banka_button.callback = banka_callback
-    meslek_button.callback = meslek_callback
-    isletme_button.callback = isletme_callback
-    rozet_button.callback = rozet_callback
-    diger_button.callback = diger_callback
+    ekonomi_button.callback = lambda i: change_embed(i, ekonomi_embed)
+    kumar_button.callback = lambda i: change_embed(i, kumar_embed)
+    banka_button.callback = lambda i: change_embed(i, banka_embed)
+    meslek_button.callback = lambda i: change_embed(i, meslek_embed)
+    isletme_button.callback = lambda i: change_embed(i, isletme_embed)
+    rozet_button.callback = lambda i: change_embed(i, rozet_embed)
+    diger_button.callback = lambda i: change_embed(i, diger_embed)
 
     view.add_item(ekonomi_button)
     view.add_item(kumar_button)
@@ -1761,9 +1739,6 @@ async def embedduyuru(ctx, kanal: discord.TextChannel, *, mesaj):
     await ctx.send("✅ Embed duyuru gönderildi.")
 
 import asyncio
-
-import asyncio
-import time
 
 @bot.command()
 async def önemliduyuru(ctx, *, mesaj):
@@ -3404,24 +3379,49 @@ async def hesaprozetekle(ctx, *, rozet_adi):
 
 @bot.event
 async def on_ready():
+
+    if getattr(bot, "ready_once", False):
+        return  # tekrar tetiklenmesini engeller
+
+    bot.ready_once = True
+
+    print("===================================")
     print(f"{bot.user} aktif!")
+    print(f"Sunucu sayısı: {len(bot.guilds)}")
+    print("===================================")
 
-    bot.add_view(TicketPanelView())
+    # Persistent View (Ticket vs varsa)
+    try:
+        bot.add_view(TicketPanelView())
+        print("TicketPanelView yüklendi")
+    except Exception as e:
+        print("TicketPanelView yüklenemedi:", e)
 
-    # Durum loop
-    if not durum_degistir.is_running():
-        print("Durum değiştir loop başlatıldı")
-        durum_degistir.start()
+    await bot.wait_until_ready()
 
-    # Global zenginler loop
-    if not otomatik_gzenginler.is_running():
-        print("Global zenginler loop başlatıldı")
-        otomatik_gzenginler.start()
+    # ================= DURUM LOOP =================
+    try:
+        if not durum_degistir.is_running():
+            durum_degistir.start()
+            print("Durum değiştir loop başlatıldı")
+    except Exception as e:
+        print("Durum loop hatası:", e)
 
-    # Enflasyon loop
-    if not enflasyon_gonder.is_running():
-        print("Enflasyon loop başlatıldı")
-        enflasyon_gonder.start()
+    # ================= GLOBAL ZENGİNLER LOOP =================
+    try:
+        if not otomatik_gzenginler.is_running():
+            otomatik_gzenginler.start()
+            print("Global zenginler loop başlatıldı")
+    except Exception as e:
+        print("Global zenginler loop hatası:", e)
+
+    # ================= ENFLASYON LOOP =================
+    try:
+        if not enflasyon_gonder.is_running():
+            enflasyon_gonder.start()
+            print("Enflasyon loop başlatıldı")
+    except Exception as e:
+        print("Enflasyon loop hatası:", e)
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
