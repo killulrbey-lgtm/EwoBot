@@ -2374,76 +2374,29 @@ class AdminMainView(discord.ui.View):
             view=BakimView()
         )
 
-## =====================================================
-# EKONOMİ MODAL 1 (İlk 5 Varlık)
+# =====================================================
+# EKONOMİ GÜNCELLE MODAL (TEK MODAL - STABLE)
 # =====================================================
 
-class EkonomiDegistirModal1(discord.ui.Modal, title="Ekonomi Güncelle (1/2)"):
+class EkonomiDegistirModal(discord.ui.Modal, title="Ekonomi Güncelle"):
 
     def __init__(self):
         super().__init__(timeout=None)
 
         self.varliklar = list(varsayilan_varlikler.keys())
-        self.ilk_bes = self.varliklar[:5]
 
-        for varlik in self.ilk_bes:
-            data = economy_col.find_one({"_id": varlik})
-            eski = data["current_price"] if data else varsayilan_varlikler.get(varlik, 0)
+        metin = ""
 
-            self.add_item(
-                discord.ui.TextInput(
-                    label=f"{varlik} (Eski: {formatla(eski)})",
-                    default=str(eski),
-                    required=True,
-                    max_length=20
-                )
-            )
-
-    async def on_submit(self, interaction: discord.Interaction):
-
-        # Geçici veri oluştur
-        if not hasattr(interaction.client, "ekonomi_temp"):
-            interaction.client.ekonomi_temp = {}
-
-        interaction.client.ekonomi_temp[interaction.user.id] = {}
-
-        for i, varlik in enumerate(self.ilk_bes):
-            try:
-                yeni = int(self.children[i].value.replace(".", "").replace(",", "").strip())
-                interaction.client.ekonomi_temp[interaction.user.id][varlik] = yeni
-            except:
-                return await interaction.response.send_message(
-                    f"❌ {varlik} için geçersiz sayı girdiniz.",
-                    ephemeral=True
-                )
-
-        # Modal 2 aç
-        await interaction.response.send_modal(EkonomiDegistirModal2())
-
-
-# =====================================================
-# EKONOMİ MODAL 2 (Kalan Varlıklar)
-# =====================================================
-
-class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
-
-    def __init__(self):
-        super().__init__(timeout=None)
-
-        self.varliklar = list(varsayilan_varlikler.keys())[5:]
-
-        # Kalan varlıkları metin olarak göster
-        aciklama = ""
         for varlik in self.varliklar:
             data = economy_col.find_one({"_id": varlik})
             eski = data["current_price"] if data else varsayilan_varlikler.get(varlik, 0)
-            aciklama += f"{varlik} = {eski}\n"
+            metin += f"{varlik}={eski}\n"
 
         self.add_item(
             discord.ui.TextInput(
-                label="Kalan Varlıklar (örnek: Altin=5000)",
+                label="Varlık Fiyatları (örnek: Altin=5000)",
                 style=discord.TextStyle.paragraph,
-                default=aciklama,
+                default=metin,
                 required=True,
                 max_length=2000
             )
@@ -2451,82 +2404,67 @@ class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        if not hasattr(interaction.client, "ekonomi_temp"):
-            return await interaction.response.send_message(
-                "❌ Oturum verisi bulunamadı. Tekrar deneyin.",
-                ephemeral=True
+        try:
+            satirlar = self.children[0].value.split("\n")
+
+            embed = discord.Embed(
+                title="📊 EwoEkonomi Güncellendi!",
+                color=discord.Color.dark_blue()
             )
 
-        try:
-            girilen = self.children[0].value.split("\n")
+            for satir in satirlar:
 
-            for satir in girilen:
                 if "=" not in satir:
                     continue
 
                 varlik, fiyat = satir.split("=")
+
                 varlik = varlik.strip()
-                fiyat = int(fiyat.replace(".", "").replace(",", "").strip())
+                yeni_fiyat = int(fiyat.replace(".", "").replace(",", "").strip())
 
-                interaction.client.ekonomi_temp[interaction.user.id][varlik] = fiyat
+                eski_data = economy_col.find_one({"_id": varlik})
+                eski = eski_data["current_price"] if eski_data else 0
 
-        except:
-            return await interaction.response.send_message(
-                "❌ Format hatası. Örnek: Altin=5000",
+                economy_col.update_one(
+                    {"_id": varlik},
+                    {"$set": {"current_price": yeni_fiyat}},
+                    upsert=True
+                )
+
+                fark = yeni_fiyat - eski
+
+                if fark > 0:
+                    durum = f"🟢 +{formatla(fark)}"
+                elif fark < 0:
+                    durum = f"🔴 -{formatla(abs(fark))}"
+                else:
+                    durum = "⚪ Değişim yok"
+
+                embed.add_field(
+                    name=f"{varlik} ({durum})",
+                    value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni_fiyat)}",
+                    inline=False
+                )
+
+            if interaction.client.user.avatar:
+                embed.set_thumbnail(url=interaction.client.user.avatar.url)
+
+            embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
+
+            kanal = interaction.client.get_channel(EKONOMI_LOG_KANAL)
+            if kanal:
+                await kanal.send(embed=embed)
+
+            await interaction.response.send_message(
+                "✅ Ekonomi başarıyla güncellendi.",
                 ephemeral=True
             )
 
-        embed = discord.Embed(
-            title="📊 EwoEkonomi Güncellendi!",
-            color=discord.Color.dark_blue()
-        )
-
-        # Güncelleme
-        for varlik, yeni_fiyat in interaction.client.ekonomi_temp[interaction.user.id].items():
-
-            eski_data = economy_col.find_one({"_id": varlik})
-            eski = eski_data["current_price"] if eski_data else 0
-
-            economy_col.update_one(
-                {"_id": varlik},
-                {"$set": {"current_price": yeni_fiyat}},
-                upsert=True
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ Hata oluştu: {str(e)}",
+                ephemeral=True
             )
-
-            fark = yeni_fiyat - eski
-
-            if fark > 0:
-                durum = f"🟢 +{formatla(fark)}"
-            elif fark < 0:
-                durum = f"🔴 -{formatla(abs(fark))}"
-            else:
-                durum = "⚪ Değişim yok"
-
-            embed.add_field(
-                name=f"{varlik} ({durum})",
-                value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni_fiyat)}",
-                inline=False
-            )
-
-        # Avatar güvenli
-        if interaction.client.user.avatar:
-            embed.set_thumbnail(url=interaction.client.user.avatar.url)
-
-        embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
-
-        # Log kanalı
-        kanal = interaction.client.get_channel(EKONOMI_LOG_KANAL)
-        if kanal:
-            await kanal.send(embed=embed)
-
-        # Geçici veriyi temizle
-        interaction.client.ekonomi_temp.pop(interaction.user.id, None)
-
-        await interaction.response.send_message(
-            "✅ Ekonomi başarıyla güncellendi.",
-            ephemeral=True
-        )
-
 # =====================================================
 # EKONOMİ VIEW
 # =====================================================
@@ -2561,7 +2499,7 @@ class EkonomiView(discord.ui.View):
 
     @discord.ui.button(label="Ekonomi Değiştir", style=discord.ButtonStyle.success)
     async def degistir(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(EkonomiDegistirModal1())
+        await interaction.response.send_modal(EkonomiDegistirModal())
 
     @discord.ui.button(label="Ekonomi Sıfırla", style=discord.ButtonStyle.danger)
     async def sifirla(self, interaction: discord.Interaction, button: discord.ui.Button):
