@@ -209,19 +209,19 @@ async def xp_ekle(user_id, miktar):
 GOREVLER = [
 
     {"id": "cf_25", "ad": "Kumarbaz I", "tip": "cf", "hedef": 25, "xp": 200},
-    {"id": "cf_100", "ad": "Kumarbaz II", "tip": "cf", "hedef": 100, "xp": 500},
+    {"id": "cf_100", "ad": "Kumarbaz II", "tip": "cf", "hedef": 50, "xp": 500},
 
-    {"id": "slot_50", "ad": "Slot Ustası I", "tip": "slot", "hedef": 50, "xp": 250},
-    {"id": "slot_200", "ad": "Slot Ustası II", "tip": "slot", "hedef": 200, "xp": 600},
+    {"id": "slot_50", "ad": "Slot Ustası I", "tip": "slot", "hedef": 25, "xp": 250},
+    {"id": "slot_200", "ad": "Slot Ustası II", "tip": "slot", "hedef": 50, "xp": 600},
 
     {"id": "bj_50", "ad": "Blackjackçi I", "tip": "blackjack", "hedef": 50, "xp": 300},
 
     {"id": "kazanc_100k", "ad": "100K Kazan", "tip": "kazanc", "hedef": 100000, "xp": 400},
     {"id": "kazanc_1m", "ad": "1M Kazan", "tip": "kazanc", "hedef": 1000000, "xp": 1000},
 
-    {"id": "maas_20", "ad": "Maaş Bağımlısı", "tip": "maas", "hedef": 20, "xp": 300},
+    {"id": "maas_20", "ad": "Maaş Bağımlısı", "tip": "maas", "hedef": 14, "xp": 300},
 
-    {"id": "gunluk_30", "ad": "Günlük Toplayıcı", "tip": "gunluk", "hedef": 30, "xp": 400},
+    {"id": "gunluk_30", "ad": "Günlük Toplayıcı", "tip": "gunluk", "hedef": 7, "xp": 400},
 
     {"id": "isletme_10", "ad": "İşletme Patronu I", "tip": "isletme", "hedef": 10, "xp": 500},
 
@@ -2046,22 +2046,91 @@ async def logpanel(ctx):
     await ctx.send("⚙️ Admin Log Paneli", view=view)
 
 # Sunucuya eklenme logu (ekleyen kişinin ismi eklendi)
+MILESTONES = {
+    21: 1,
+    50: 5000,
+    100: 10000,
+    200: 20000,
+    500: 30000,
+    1000: 40000
+}
+
+MILESTONE_KANAL = 1474728861920137276
+BOT_LOG_KANAL = 1474497995297918976
+
+
 @bot.event
 async def on_guild_join(guild):
-    kanal = bot.get_channel(EKLEME_LOG_KANAL)
-    inviter_name = "Bilinmiyor"
-    if guild.owner:
-        inviter_name = guild.owner.name
-    if kanal:
+
+    toplam = len(bot.guilds)
+    kanal = bot.get_channel(MILESTONE_KANAL)
+
+    if not kanal:
+        return
+
+    # Daha önce atılmış milestone kontrolü
+    data = settings_col.find_one({"_id": "milestones"}) or {"tamamlanan": []}
+    tamamlanan = data.get("tamamlanan", [])
+
+    if toplam in MILESTONES and toplam not in tamamlanan:
+
+        odul = MILESTONES[toplam]
+
+        # 🎁 Tüm kullanıcılara ödül yatır
+        collection.update_many({}, {"$inc": {"banka": odul}})
+
+        # 🔥 SON 20 SUNUCUYU GÖSTER
+        guild_list = [g.name for g in bot.guilds]
+
+        if len(guild_list) > 20:
+            son_yirmi = guild_list[-20:]  # SON 20
+            goster = "\n".join(son_yirmi)
+            kalan = len(guild_list) - 20
+            sunucu_yazi = f"{goster}\n\n+{kalan} daha..."
+        else:
+            sunucu_yazi = "\n".join(guild_list)
+
         embed = discord.Embed(
-            title="🎉 EwoBot Sunucuya Eklendi!",
-            color=discord.Color.green()
+            title=f"🚀 EWO BOT ARTIK {toplam} SUNUCUDA!",
+            description=(
+                "Botumuz aşağıdaki sunucularda aktif olarak kullanılıyor!\n\n"
+                f"{sunucu_yazi}\n\n"
+                "💚 Botumuzu sunucusuna ekleyen herkese teşekkür ederiz!\n"
+                f"🎁 Tüm kullanıcılara {odul:,} EwoCoin hediye edildi!"
+            ),
+            color=discord.Color.gold()
         )
-        embed.add_field(name="Sunucu", value=guild.name)
-        embed.add_field(name="Üye Sayısı", value=guild.member_count)
-        embed.add_field(name="Ekleyen", value=inviter_name)
-        embed.set_footer(text=f"Sunucu ID: {guild.id}")
+
+        embed.set_footer(text="EwoBot Milestone Sistemi")
+
         await kanal.send(embed=embed)
+
+        # Milestone kaydet
+        tamamlanan.append(toplam)
+
+        settings_col.update_one(
+            {"_id": "milestones"},
+            {"$set": {"tamamlanan": tamamlanan}},
+            upsert=True
+        )
+
+@bot.event
+async def on_guild_remove(guild):
+
+    kanal = bot.get_channel(BOT_LOG_KANAL)
+    if not kanal:
+        return
+
+    embed = discord.Embed(
+        title="❌ EwoBot Bir Sunucudan Çıkarıldı",
+        color=discord.Color.red()
+    )
+
+    embed.add_field(name="Sunucu", value=guild.name, inline=False)
+    embed.add_field(name="Sunucu ID", value=guild.id, inline=False)
+    embed.add_field(name="Kalan Sunucu Sayısı", value=len(bot.guilds), inline=False)
+
+    await kanal.send(embed=embed)
 
 # Mesaj silme
 @bot.event
