@@ -2062,57 +2062,73 @@ BOT_LOG_KANAL = 1474500594554372247
 @bot.event
 async def on_guild_join(guild):
 
-    toplam = len(bot.guilds)
-    kanal = bot.get_channel(MILESTONE_KANAL)
+    await bot.wait_until_ready()
 
-    if not kanal:
+    toplam = len(bot.guilds)
+
+    print(f"Yeni sunucu: {guild.name} | Toplam: {toplam}")
+
+    try:
+        kanal = await bot.fetch_channel(MILESTONE_KANAL)
+    except:
+        print("Milestone kanalı bulunamadı.")
         return
 
-    # Daha önce atılmış milestone kontrolü
-    data = settings_col.find_one({"_id": "milestones"}) or {"tamamlanan": []}
-    tamamlanan = data.get("tamamlanan", [])
+    # Sistem verisi
+    data = settings_col.find_one({"_id": "milestone_system"}) or {
+        "last_reached": 0
+    }
 
-    if toplam in MILESTONES and toplam not in tamamlanan:
+    last_reached = data.get("last_reached", 0)
 
-        odul = MILESTONES[toplam]
+    # Eğer yeni bir rekor kırıldıysa
+    if toplam > last_reached:
 
-        # 🎁 Tüm kullanıcılara ödül yatır
-        collection.update_many({}, {"$inc": {"banka": odul}})
+        # milestone'ları sırayla kontrol et
+        for hedef, odul in sorted(MILESTONES.items()):
 
-        # 🔥 SON 20 SUNUCUYU GÖSTER
-        guild_list = [g.name for g in bot.guilds]
+            if last_reached < hedef <= toplam:
 
-        if len(guild_list) > 20:
-            son_yirmi = guild_list[-20:]  # SON 20
-            goster = "\n".join(son_yirmi)
-            kalan = len(guild_list) - 20
-            sunucu_yazi = f"{goster}\n\n+{kalan} daha..."
-        else:
-            sunucu_yazi = "\n".join(guild_list)
+                print(f"Milestone tetiklendi: {hedef}")
 
-        embed = discord.Embed(
-            title=f"🚀 EWO BOT ARTIK {toplam} SUNUCUDA!",
-            description=(
-                "Botumuz aşağıdaki sunucularda aktif olarak kullanılıyor!\n\n"
-                f"{sunucu_yazi}\n\n"
-                "💚 Botumuzu sunucusuna ekleyen herkese teşekkür ederiz!\n"
-                f"🎁 Tüm kullanıcılara {odul:,} EwoCoin hediye edildi!"
-            ),
-            color=discord.Color.gold()
-        )
+                # 🎁 Ödül yatır
+                result = collection.update_many({}, {"$inc": {"banka": odul}})
+                print(f"Ödül yatırıldı: {result.modified_count} kullanıcı")
 
-        embed.set_footer(text="EwoBot Milestone Sistemi")
+                # SON 20 SUNUCU
+                guild_list = [g.name for g in bot.guilds]
 
-        await kanal.send(embed=embed)
+                if len(guild_list) > 20:
+                    son_yirmi = guild_list[-20:]
+                    goster = "\n".join(son_yirmi)
+                    kalan = len(guild_list) - 20
+                    sunucu_yazi = f"{goster}\n\n+{kalan} daha..."
+                else:
+                    sunucu_yazi = "\n".join(guild_list)
 
-        # Milestone kaydet
-        tamamlanan.append(toplam)
+                embed = discord.Embed(
+                    title=f"🚀 EWO BOT ARTIK {hedef} SUNUCUDA!",
+                    description=(
+                        "Botumuz aşağıdaki sunucularda aktif olarak kullanılıyor!\n\n"
+                        f"{sunucu_yazi}\n\n"
+                        "💚 Botumuzu sunucusuna ekleyen herkese teşekkür ederiz!\n"
+                        f"🎁 Tüm kullanıcılara {odul:,} EwoCoin hediye edildi!"
+                    ),
+                    color=discord.Color.gold()
+                )
 
-        settings_col.update_one(
-            {"_id": "milestones"},
-            {"$set": {"tamamlanan": tamamlanan}},
-            upsert=True
-        )
+                embed.set_footer(text="EwoBot Milestone Sistemi")
+
+                await kanal.send(embed=embed)
+
+                # last_reached güncelle
+                settings_col.update_one(
+                    {"_id": "milestone_system"},
+                    {"$set": {"last_reached": hedef}},
+                    upsert=True
+                )
+
+        print("Milestone kontrol tamamlandı.")
 
 @bot.event
 async def on_guild_remove(guild):
