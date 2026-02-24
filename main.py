@@ -2520,7 +2520,7 @@ class EkonomiView(discord.ui.View):
 
     @discord.ui.button(label="Ekonomi Değiştir", style=discord.ButtonStyle.success)
     async def degistir(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(EkonomiDegistirModal())
+        await interaction.response.send_modal(EkonomiDegistirModal1())
 
     @discord.ui.button(label="Ekonomi Sıfırla", style=discord.ButtonStyle.danger)
     async def sifirla(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2568,14 +2568,21 @@ class KanalView(discord.ui.View):
 async def global_bakim_kontrol(ctx):
 
     data = settings_col.find_one({"_id": "global"})
+
     if data and data.get("bakim_modu"):
 
-        if ctx.author.guild_permissions.administrator:
+        # Sadece izinli 2 kişi kullanabilir
+        izinli_kullanicilar = [
+            1271933410251772017,
+            1391502292934590539
+        ]
+
+        if ctx.author.id in izinli_kullanicilar:
             return True
 
         embed = discord.Embed(
-            title="🛠 Bot Bakımda",
-            description="Komutlar geçici olarak devre dışı.",
+            title="🛠 EwoBot Bakımda",
+            description="Şu anda komut kullanamazsınız!\nLütfen bakımın bitmesini bekleyin.",
             color=discord.Color.red()
         )
 
