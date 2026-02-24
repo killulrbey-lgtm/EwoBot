@@ -752,7 +752,7 @@ async def hesap(ctx):
         color=discord.Color.blue()
     )
 
-    embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
 
     embed.add_field(name="💰 Nakit", value=formatla(user.get("para", 0)), inline=False)
     embed.add_field(name="🏦 Banka", value=formatla(user.get("banka", 0)), inline=False)
@@ -760,6 +760,21 @@ async def hesap(ctx):
     embed.add_field(name="💵 Günlük Maaş", value=formatla(maas), inline=False)
     embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=formatla(faiz), inline=False)
 
+    # Aktif Rozet
+    aktif_rozet = user.get("active_badge")
+    if aktif_rozet:
+        embed.add_field(name="🏅 Aktif Rozet", value=aktif_rozet, inline=False)
+
+    # Eş
+    es_id = user.get("married_to")
+    if es_id:
+        try:
+            es_user = await bot.fetch_user(es_id)
+            embed.add_field(name="💍 Eşi", value=es_user.name, inline=False)
+        except:
+            embed.add_field(name="💍 Eşi", value="Bilinmiyor", inline=False)
+
+    # Yatırımlar
     yatirimlar = user.get("yatirimlar", {})
     text = ""
 
@@ -772,10 +787,7 @@ async def hesap(ctx):
 
     embed.add_field(name="📦 Varlıkların", value=text, inline=False)
 
-    # -------------------
-    # 🏭 İŞLETMELER
-    # -------------------
-
+    # İşletmeler
     isletme_text = ""
     for isim, veri in user.get("isletmeler", {}).items():
         adet = veri.get("adet", 0)
@@ -837,7 +849,6 @@ async def blackjack(ctx, miktar: str = None):
     MAX_BET = 100000
     user = get_user(ctx.author.id)
 
-    # ALL sistemi
     if miktar.lower() == "all":
         miktar = min(user["para"], MAX_BET)
     else:
@@ -854,11 +865,13 @@ async def blackjack(ctx, miktar: str = None):
     if user["para"] < miktar:
         return await ctx.send("❌ Yeterli paran yok.")
 
-    # Parayı düş
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": -miktar}}
     )
+
+    msg = await ctx.send("🃏 Kartlar Dağıtılıyor...")
+    await asyncio.sleep(2)
 
     kartlar = [2,3,4,5,6,7,8,9,10,10,10,10,11]
 
@@ -875,7 +888,6 @@ async def blackjack(ctx, miktar: str = None):
     oyuncu_toplam = toplam(oyuncu)
     bot_toplam = toplam(bot_kart)
 
-    # Bot kart çeker
     while bot_toplam < 17:
         bot_kart.append(random.choice(kartlar))
         bot_toplam = toplam(bot_kart)
@@ -883,7 +895,7 @@ async def blackjack(ctx, miktar: str = None):
     mesaj = (
         "🃏 **Blackjack**\n\n"
         f"👤 Sen: {oyuncu} → {oyuncu_toplam}\n"
-        f"🤖 Bot: {bot_kart} → {bot_toplam}\n"
+        f"🤖 Bot: {bot_kart} → {bot_toplam}\n\n"
     )
 
     if oyuncu_toplam > 21:
@@ -906,7 +918,7 @@ async def blackjack(ctx, miktar: str = None):
 
     await xp_ekle(ctx.author.id, 5)
 
-    await ctx.send(mesaj + "\n" + sonuc)
+    await msg.edit(content=mesaj + sonuc)
 
 # ================== EKONOMİ KOMUTU ==================
 
@@ -1115,7 +1127,7 @@ durum_degistir.counter = 0
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def davet(ctx):
 
-    invite_link = "https://discord.com/oauth2/authorize?client_id=1475533273160618204&permissions=2147863616&scope=bot%20applications.commands"
+    invite_link = "https://discord.com/oauth2/authorize?client_id=1475533273160618204&permissions=8&scope=bot%20applications.commands"
 
     view = discord.ui.View()
 
@@ -1129,6 +1141,7 @@ async def davet(ctx):
     await ctx.send(
         "Botu sunucuna eklemek için aşağıdaki butona tıkla:",
         view=view
+    )
     )
 
 # ------------------- GLOBAL / SUNUCU ÖZEL AYARLARI -------------------
@@ -2246,7 +2259,22 @@ class BakimView(discord.ui.View):
     async def geri(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=admin_main_embed(), view=AdminMainView())
 
-# ------------------- MARKET ANA KOMUT -------------------
+# =====================================================
+# 🛒 MARKET SİSTEMİ (YÜZÜK DAHİL TAM SÜRÜM)
+# =====================================================
+
+MARKET_URUNLERI = {
+    "Bronz Kasa": {"fiyat": 500},
+    "Gümüş Kasa": {"fiyat": 2000},
+    "Altın Kasa": {"fiyat": 5000},
+    "Elmas Kasa": {"fiyat": 15000},
+    "Premium Kasa": {"fiyat": 30000},
+    "EwoPlus Kasa": {"fiyat": 60000},
+    "Silah": {"fiyat": 15000},
+    "Özel Koruma": {"fiyat": 20000},
+    "Olta": {"fiyat": 1000},
+    "Yüzük": {"fiyat": 75000}
+}
 
 @bot.command()
 async def market(ctx):
@@ -2261,19 +2289,20 @@ def market_ana_embed():
         description=(
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🎁 **KASA KATEGORİSİ**\n\n"
-            "🟤 Bronz Kasa → 100 - 1.000 EwoCoin\n"
-            "⚪ Gümüş Kasa → 200 - 5.000 EwoCoin\n"
-            "🟡 Altın Kasa → 400 - 10.000 EwoCoin\n"
-            "💎 Elmas Kasa → 750 - 25.000 EwoCoin\n"
-            "🌟 Premium Kasa → 1.000 - 50.000 EwoCoin\n"
-            "🔥 EwoPlus Kasa → 5.000 - 100.000 EwoCoin\n\n"
+            "🟤 Bronz Kasa\n"
+            "⚪ Gümüş Kasa\n"
+            "🟡 Altın Kasa\n"
+            "💎 Elmas Kasa\n"
+            "🌟 Premium Kasa\n"
+            "🔥 EwoPlus Kasa\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🕶 **SOYGUN KATEGORİSİ**\n\n"
-            "🔫 Silah → +%50 başarı & +%10 daha fazla çalma\n"
-            "🛡 Özel Koruma → -%25 rakip başarı & -%10 çalma\n\n"
+            "🔫 Silah\n"
+            "🛡 Özel Koruma\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🎣 **EKONOMİ KATEGORİSİ**\n\n"
-            "🎣 Olta → Efsanevi balık boostu"
+            "🎣 Olta\n"
+            "💍 Yüzük"
         ),
         color=discord.Color.dark_blue()
     )
@@ -2335,7 +2364,7 @@ def soygun_embed():
 def ekonomi_market_embed():
     return discord.Embed(
         title="🎣 Ekonomi Ürünleri",
-        description="Olta - 1000",
+        description="Olta - 1000\nYüzük - 75000",
         color=discord.Color.blue()
     )
 
@@ -2410,6 +2439,10 @@ class EkonomiMarketView(discord.ui.View):
     async def olta(self, interaction, button):
         await satin_al(interaction, "Olta")
 
+    @discord.ui.button(label="Yüzük Al (75000)", style=discord.ButtonStyle.primary)
+    async def yuzuk(self, interaction, button):
+        await satin_al(interaction, "Yüzük")
+
     @discord.ui.button(label="⬅️ Geri", style=discord.ButtonStyle.grey)
     async def geri(self, interaction, button):
         await interaction.response.edit_message(
@@ -2418,7 +2451,7 @@ class EkonomiMarketView(discord.ui.View):
         )
 
 
-# ------------------- SATIN AL FONKSİYONU -------------------
+# ------------------- SATIN AL -------------------
 
 async def satin_al(interaction, urun):
 
@@ -2451,12 +2484,37 @@ async def satin_al(interaction, urun):
 async def envanter(ctx):
 
     user = get_user(ctx.author.id)
-    envanter = user["envanter"]
+    envanter = user.get("envanter", {})
+
+    if not envanter:
+        embed = discord.Embed(
+            title="🎒 Envanterin",
+            description="Envanter boş.",
+            color=discord.Color.dark_blue()
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        return await ctx.send(embed=embed)
 
     text = ""
+
     for urun, adet in envanter.items():
         if adet > 0:
-            text += f"{urun}: {adet}\n"
+
+            # Ürün ikonları
+            if urun == "Yüzük":
+                icon = "💍"
+            elif "Kasa" in urun:
+                icon = "🎁"
+            elif urun == "Silah":
+                icon = "🔫"
+            elif urun == "Özel Koruma":
+                icon = "🛡"
+            elif urun == "Olta":
+                icon = "🎣"
+            else:
+                icon = "📦"
+
+            text += f"{icon} {urun} x{adet}\n"
 
     if text == "":
         text = "Envanter boş."
@@ -2467,9 +2525,10 @@ async def envanter(ctx):
         color=discord.Color.dark_blue()
     )
 
-    embed.set_thumbnail(url=ctx.author.avatar.url)
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+    embed.set_footer(text="💡 Marketten yeni eşyalar alarak envanterini genişletebilirsin.")
 
-    await ctx.send(embed=embed)
+    await ctx.send(embed=embed)yüzük
 
 # balık tutma 
 @bot.command()
@@ -2934,6 +2993,97 @@ async def işletmeparaçek(ctx):
     embed.set_footer(text="EwoBot İşletme Sistemi")
 
     await ctx.send(embed=embed)
+
+# EVLENME
+
+@bot.command()
+async def evlen(ctx, member: discord.Member):
+
+    if member.id == ctx.author.id:
+        return await ctx.send("❌ Kendinle evlenemezsin.")
+
+    user = get_user(ctx.author.id)
+    hedef = get_user(member.id)
+
+    if user.get("married_to"):
+        return await ctx.send("❌ Zaten evlisin.")
+
+    if hedef.get("married_to"):
+        return await ctx.send("❌ O kişi zaten evli.")
+
+    if user.get("envanter", {}).get("Yüzük", 0) < 1:
+        return await ctx.send("❌ Evlenmek için envanterinde Yüzük olmalı.")
+
+    await ctx.send(
+        f"💍 {member.mention}, {ctx.author.mention} sana evlilik teklifi etti.\n"
+        "Kabul ediyorsan **evet** yaz.\n"
+        "Reddediyorsan **hayır** yaz."
+    )
+
+    def check(m):
+        return m.author.id == member.id and m.channel == ctx.channel and m.content.lower() in ["evet", "hayır"]
+
+    try:
+        msg = await bot.wait_for("message", timeout=60, check=check)
+    except asyncio.TimeoutError:
+        return await ctx.send("⏰ Süre doldu. Teklif iptal edildi.")
+
+    if msg.content.lower() == "evet":
+
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {
+                "$inc": {"envanter.Yüzük": -1},
+                "$set": {"married_to": member.id}
+            }
+        )
+
+        collection.update_one(
+            {"_id": str(member.id)},
+            {"$set": {"married_to": ctx.author.id}}
+        )
+
+        await ctx.send("🎉 Tebrikler! Artık evlisiniz!")
+    else:
+        await ctx.send("❌ Evlilik teklifi reddedildi.")
+
+# BOŞAN
+@bot.command()
+async def boşan(ctx):
+
+    user = get_user(ctx.author.id)
+
+    es_id = user.get("married_to")
+
+    if not es_id:
+        return await ctx.send("❌ Evli değilsin.")
+
+    es = get_user(es_id)
+
+    toplam_servet = user.get("para", 0) + user.get("banka", 0)
+    tazminat = int(toplam_servet * 0.05)
+
+    if user.get("para", 0) < tazminat:
+        return await ctx.send(f"❌ Boşanmak için {formatla(tazminat)} EwoCoin gerekiyor.")
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {"para": -tazminat},
+            "$set": {"married_to": None}
+        }
+    )
+
+    collection.update_one(
+        {"_id": str(es_id)},
+        {
+            "$inc": {"para": tazminat},
+            "$set": {"married_to": None}
+        }
+    )
+
+    await ctx.send(f"💔 Boşandınız. {formatla(tazminat)} EwoCoin tazminat ödendi.")
+
 
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
