@@ -2400,21 +2400,21 @@ class EkonomiDegistirModal1(discord.ui.Modal, title="Ekonomi Güncelle (1/2)"):
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        await interaction.response.defer(ephemeral=True)
-
-        interaction.client.temp_ekonomi = {}
+        ekonomi_gecici_veri[interaction.user.id] = {}
 
         for i, varlik in enumerate(self.ilk_bes):
             try:
                 yeni = int(self.children[i].value.replace(".", "").replace(",", ""))
-                interaction.client.temp_ekonomi[varlik] = yeni
+                ekonomi_gecici_veri[interaction.user.id][varlik] = yeni
             except:
-                return await interaction.followup.send(
-                    f"❌ {varlik} için geçersiz sayı.",
+                await interaction.response.send_message(
+                    f"❌ {varlik} için geçersiz sayı girdiniz.",
                     ephemeral=True
                 )
+                return
 
-        await interaction.followup.send_modal(EkonomiDegistirModal2())
+        # İKİNCİ MODALI AÇ
+        await interaction.response.send_modal(EkonomiDegistirModal2())
 
 
 # =====================================================
