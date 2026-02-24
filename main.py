@@ -271,8 +271,10 @@ ROZETLER = {
     "Slotçu I": "50 slot oynayın",
     "Slotçu II": "200 slot oynayın",
     "Blackjackçi": "50 blackjack oynayın",
+
     "Zengin I": "100.000 kazan",
     "Zengin II": "1.000.000 kazan",
+
     "Maaşçı": "20 maaş al",
     "Günlükcü": "30 günlük al",
     "Patron": "10 işletme geliri topla",
@@ -355,14 +357,27 @@ async def rozet_kontrol(user_id):
     if user.get("toplam_kayip", 0) >= 10000000:
         kazanilanlar.append("10M Kayıp")
 
-    # 🔥 TEKRAR EKLENMESİN DİYE FİLTRE
-    yeni_rozetler = [r for r in kazanilanlar if r not in rozetler]
+    # 🔥 Yeni rozetleri filtrele
+    yeni = [r for r in kazanilanlar if r not in rozetler]
 
-    if yeni_rozetler:
+    if yeni:
         collection.update_one(
             {"_id": str(user_id)},
-            {"$push": {"rozetler": {"$each": yeni_rozetler}}}
+            {"$push": {"rozetler": {"$each": yeni}}}
         )
+
+        # 🎉 DM Bildirimi
+        user_obj = bot.get_user(int(user_id))
+        if user_obj:
+            try:
+                embed = discord.Embed(
+                    title="🎉 Yeni Rozet Kazandın!",
+                    description="\n".join([f"🏅 {r}" for r in yeni]),
+                    color=discord.Color.gold()
+                )
+                await user_obj.send(embed=embed)
+            except:
+                pass
 
 
 
@@ -750,23 +765,23 @@ async def bankayatır(ctx, miktar: int):
 
 from discord.ui import View, Button
 
-@bot.command(name="yardım")
+@bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
-async def yardim(ctx):
+async def yardım(ctx):
 
     ekonomi_embed = discord.Embed(
         title="💰 Ekonomi Komutları",
         description="""
-`q!param`
-`q!paragönder @kişi miktar`
-`q!hesap`
-`q!level`
-`q!satınal <varlık> <miktar>`
-`q!sat <varlık> <miktar>`
-`q!ekonomi`
-`q!dilen`
-`q!gunluk`
-`q!maaş`
+q!param → Paranızı gösterir
+q!paragönder @kişi miktar → Para gönderir
+q!hesap → Hesap bilgilerinizi gösterir
+q!level → Hesap Levelinizi gösterir
+q!satınal <varlık> <miktar> → Varlık satın alır
+q!sat <varlık> <miktar> → Varlık satar
+q!ekonomi → Ekonomi durumunu gösterir
+q!dilen → Dilenme komutu
+q!gunluk → Günlük paranızı verir
+q!maaş → Maaşınızı yatırır
 """,
         color=discord.Color.green()
     )
@@ -774,10 +789,10 @@ async def yardim(ctx):
     kumar_embed = discord.Embed(
         title="🎲 Kumar Komutları",
         description="""
-`q!cf miktar`
-`q!balıktut`
-`q!slot miktar`
-`q!blackjack miktar`
+q!cf miktar → Yazı tura
+q!balıktut → Balık Oyunu
+q!slot miktar → Slot oyunu
+q!blackjack miktar → Blackjack oyunu
 """,
         color=discord.Color.red()
     )
@@ -785,9 +800,9 @@ async def yardim(ctx):
     banka_embed = discord.Embed(
         title="🏦 Banka Komutları",
         description="""
-`q!banka`
-`q!bankayatır miktar`
-`q!bankaçek miktar`
+q!banka → Banka hesabını gösterir
+q!bankayatır miktar → Bankaya para yatır
+q!bankaçek miktar → Bankadan para çek
 """,
         color=discord.Color.gold()
     )
@@ -795,8 +810,8 @@ async def yardim(ctx):
     meslek_embed = discord.Embed(
         title="💼 Meslek Komutları",
         description="""
-`q!meslekler`
-`q!meslek al <meslek>`
+q!meslekler → Meslekleri listeler
+q!meslek al <meslek> → Meslek satın al
 """,
         color=discord.Color.purple()
     )
@@ -804,78 +819,80 @@ async def yardim(ctx):
     isletme_embed = discord.Embed(
         title="🏭 İşletme Komutları",
         description="""
-`q!işletmeler`
-`q!işletmeal <isim> <miktar>`
-`q!işletmeyükselt <isim>`
-`q!işletmeparaçek`
-`q!işletmetop`
-`q!sigorta`
+q!işletmeler → Tüm işletmeleri gösterir
+q!işletmeal <isim> <miktar> → İşletme satın al
+q!işletmeyükselt <isim> → İşletmeni yükselt
+q!işletmeparaçek → Biriken geliri toplar
+q!işletmetop → Global en büyük sanayiciler
+q!sigorta → 24 saatlik sigorta al
 """,
         color=discord.Color.dark_teal()
-    )
-
-    rozet_embed = discord.Embed(
-        title="🏅 Rozet & Görev Komutları",
-        description="""
-🎯 Görev:
-`q!göreval`
-`q!görevler`
-
-🏅 Rozet:
-`q!rozetler`
-`q!rozetlerim`
-`q!hesaprozetekle <rozet adı>`
-""",
-        color=discord.Color.orange()
     )
 
     diger_embed = discord.Embed(
         title="📊 Diğer Komutlar",
         description="""
-`q!gzenginler`
-`q!szenginler`
-`q!soygun`
-`q!enflasyon`
-`q!kasaaç <KasaAdi>`
-`q!market`
-`q!envanter`
-`q!evlen @kullanıcı`
-`q!boşan`
-`q!davet`
+q!gzenginler → Global en zenginler
+q!szenginler → Sunucudaki en zenginler
+q!soygun → Başka kullanıcıyı soygun yap
+q!enflasyon → Toplam EwoCoin miktarı
+q!kasaaç <Kasaadi> → Kasa açar
+q!market → Marketi gösterir
+q!envanter → Envanteri gösterir
+q!evlen @kullanıcı → Evlilik teklifi gönderir
+q!boşan → Evliliği bitirir (evli olduğu kişiye servetinin %5'i tazminat öder)
+q!göreval → Rastgele zor görev alır
+q!görevler → Aktif görevini gösterir
+q!rozetler → Tüm rozetleri ve kazanma şartlarını gösterir
+q!rozetlerim → Sahip olduğun rozetleri gösterir
+q!hesaprozetekle <rozet adı> → Hesapta görünecek rozeti seçer
+q!davet → Botu sunucuna ekle
 """,
         color=discord.Color.blurple()
     )
 
-    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, rozet_embed, diger_embed]:
+    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, diger_embed]:
         e.set_footer(text="EwoBot Yardım Menüsü")
 
-    view = View(timeout=120)
-
-    async def change_embed(interaction, embed):
-        await interaction.response.edit_message(embed=embed, view=view)
+    view = View(timeout=None)
 
     ekonomi_button = Button(label="💰 Ekonomi", style=discord.ButtonStyle.green)
     kumar_button = Button(label="🎲 Kumar", style=discord.ButtonStyle.red)
     banka_button = Button(label="🏦 Banka", style=discord.ButtonStyle.blurple)
     meslek_button = Button(label="💼 Meslek", style=discord.ButtonStyle.gray)
     isletme_button = Button(label="🏭 İşletmeler", style=discord.ButtonStyle.green)
-    rozet_button = Button(label="🏅 Rozet & Görev", style=discord.ButtonStyle.orange)
     diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
 
-    ekonomi_button.callback = lambda i: change_embed(i, ekonomi_embed)
-    kumar_button.callback = lambda i: change_embed(i, kumar_embed)
-    banka_button.callback = lambda i: change_embed(i, banka_embed)
-    meslek_button.callback = lambda i: change_embed(i, meslek_embed)
-    isletme_button.callback = lambda i: change_embed(i, isletme_embed)
-    rozet_button.callback = lambda i: change_embed(i, rozet_embed)
-    diger_button.callback = lambda i: change_embed(i, diger_embed)
+    async def ekonomi_callback(interaction):
+        await interaction.response.edit_message(embed=ekonomi_embed, view=view)
+
+    async def kumar_callback(interaction):
+        await interaction.response.edit_message(embed=kumar_embed, view=view)
+
+    async def banka_callback(interaction):
+        await interaction.response.edit_message(embed=banka_embed, view=view)
+
+    async def meslek_callback(interaction):
+        await interaction.response.edit_message(embed=meslek_embed, view=view)
+
+    async def isletme_callback(interaction):
+        await interaction.response.edit_message(embed=isletme_embed, view=view)
+
+    async def diger_callback(interaction):
+        await interaction.response.edit_message(embed=diger_embed, view=view)
+
+    ekonomi_button.callback = ekonomi_callback
+    kumar_button.callback = kumar_callback
+    banka_button.callback = banka_callback
+    meslek_button.callback = meslek_callback
+    isletme_button.callback = isletme_callback
+    diger_button.callback = diger_callback
 
     view.add_item(ekonomi_button)
     view.add_item(kumar_button)
     view.add_item(banka_button)
     view.add_item(meslek_button)
     view.add_item(isletme_button)
-    view.add_item(rozet_button)
     view.add_item(diger_button)
 
     await ctx.send(embed=ekonomi_embed, view=view)
@@ -3398,15 +3415,31 @@ async def hesaprozetekle(ctx, *, rozet_adi):
 async def rozetler(ctx):
 
     user = get_user(ctx.author.id)
-    rozetler = user.get("rozetler", [])
+    sahip = user.get("rozetler", [])
 
-    if not rozetler:
-        return await ctx.send("🏅 Henüz rozetin yok.")
+    embed = discord.Embed(
+        title="🏅 EwoBot Rozet Sistemi",
+        description="Aşağıda bottaki tüm rozetler ve kazanma şartları yer alıyor.",
+        color=discord.Color.orange()
+    )
 
-    text = "\n".join([f"🏅 {r}" for r in rozetler])
+    rozet_text = ""
 
-    await ctx.send(f"🏅 Rozetlerin:\n{text}")
+    for rozet, aciklama in ROZETLER.items():
 
+        if rozet in sahip:
+            rozet_text += f"✅ **{rozet}**\n┗ 📌 {aciklama}\n\n"
+        else:
+            rozet_text += f"❌ {rozet}\n┗ 📌 {aciklama}\n\n"
+
+    # Discord 4096 karakter limiti için güvenlik
+    if len(rozet_text) > 4000:
+        rozet_text = rozet_text[:4000]
+
+    embed.description += "\n\n" + rozet_text
+    embed.set_footer(text=f"{len(sahip)} / {len(ROZETLER)} rozet kazanmışsın")
+
+    await ctx.send(embed=embed)
 
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
