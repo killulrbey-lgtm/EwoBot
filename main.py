@@ -2400,12 +2400,16 @@ class EkonomiDegistirModal1(discord.ui.Modal, title="Ekonomi Güncelle (1/2)"):
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        ekonomi_gecici_veri[interaction.user.id] = {}
+        # Eğer yoksa oluştur
+        if not hasattr(interaction.client, "ekonomi_gecici_veri"):
+            interaction.client.ekonomi_gecici_veri = {}
+
+        interaction.client.ekonomi_gecici_veri[interaction.user.id] = {}
 
         for i, varlik in enumerate(self.ilk_bes):
             try:
                 yeni = int(self.children[i].value.replace(".", "").replace(",", ""))
-                ekonomi_gecici_veri[interaction.user.id][varlik] = yeni
+                interaction.client.ekonomi_gecici_veri[interaction.user.id][varlik] = yeni
             except:
                 await interaction.response.send_message(
                     f"❌ {varlik} için geçersiz sayı girdiniz.",
@@ -2413,7 +2417,6 @@ class EkonomiDegistirModal1(discord.ui.Modal, title="Ekonomi Güncelle (1/2)"):
                 )
                 return
 
-        # İKİNCİ MODALI AÇ
         await interaction.response.send_modal(EkonomiDegistirModal2())
 
 
@@ -2441,21 +2444,28 @@ class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
 
     async def on_submit(self, interaction: discord.Interaction):
 
+        # Güvenlik kontrolü
+        if not hasattr(interaction.client, "ekonomi_gecici_veri"):
+            return await interaction.response.send_message(
+                "❌ Oturum verisi bulunamadı. Tekrar deneyin.",
+                ephemeral=True
+            )
+
         try:
             yeni = int(self.children[0].value.replace(".", "").replace(",", ""))
-            interaction.client.temp_ekonomi[self.varlik] = yeni
+            interaction.client.ekonomi_gecici_veri[interaction.user.id][self.varlik] = yeni
         except:
             return await interaction.response.send_message(
                 "❌ Geçersiz sayı girdiniz.",
                 ephemeral=True
             )
 
-        log_embed = discord.Embed(
-            title="📊 Ekonomi Güncellendi",
+        embed = discord.Embed(
+            title="📊 EwoEkonomi Güncellendi!",
             color=discord.Color.dark_blue()
         )
 
-        for varlik, yeni_fiyat in interaction.client.temp_ekonomi.items():
+        for varlik, yeni_fiyat in interaction.client.ekonomi_gecici_veri[interaction.user.id].items():
 
             eski_data = economy_col.find_one({"_id": varlik})
             eski = eski_data["current_price"] if eski_data else 0
@@ -2467,22 +2477,35 @@ class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
             )
 
             fark = yeni_fiyat - eski
-            durum = "🟢 Artış" if fark > 0 else "🔴 Düşüş" if fark < 0 else "⚪ Değişim yok"
 
-            log_embed.add_field(
-                name=f"{varlik} ({durum})",
+            if fark > 0:
+                emoji = "🟢"
+                baslik = f"{emoji} {varlik} (Toplam +{formatla(fark)} arttı)"
+            elif fark < 0:
+                emoji = "🔴"
+                baslik = f"{emoji} {varlik} (Toplam -{formatla(abs(fark))} indi)"
+            else:
+                emoji = "⚪"
+                baslik = f"{emoji} {varlik} (Değişim yok)"
+
+            embed.add_field(
+                name=baslik,
                 value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni_fiyat)}",
                 inline=False
             )
 
-        kanal = bot.get_channel(EKONOMI_LOG_KANAL)
-        if kanal:
-            await kanal.send(embed=log_embed)
+        embed.set_thumbnail(url=interaction.client.user.avatar.url)
+        embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
 
-        del interaction.client.temp_ekonomi
+        kanal = interaction.client.get_channel(EKONOMI_LOG_KANAL)
+        if kanal:
+            await kanal.send(embed=embed)
+
+        # Hafızayı temizle
+        interaction.client.ekonomi_gecici_veri.pop(interaction.user.id, None)
 
         await interaction.response.send_message(
-            "✅ Ekonomi başarıyla güncellendi.",
+            "✅ Ekonomi manuel olarak güncellendi.",
             ephemeral=True
         )
 
