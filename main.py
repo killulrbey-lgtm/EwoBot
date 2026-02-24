@@ -308,60 +308,61 @@ async def rozet_kontrol(user_id):
 
     user = get_user(user_id)
     rozetler = user.get("rozetler", [])
-
     kazanilanlar = []
 
-    if user["cf_sayisi"] >= 25:
+    if user.get("cf_sayisi", 0) >= 25:
         kazanilanlar.append("Kumarbaz I")
 
-    if user["cf_sayisi"] >= 100:
+    if user.get("cf_sayisi", 0) >= 100:
         kazanilanlar.append("Kumarbaz II")
 
-    if user["slot_sayisi"] >= 50:
+    if user.get("slot_sayisi", 0) >= 50:
         kazanilanlar.append("Slotçu I")
 
-    if user["slot_sayisi"] >= 200:
+    if user.get("slot_sayisi", 0) >= 200:
         kazanilanlar.append("Slotçu II")
 
-    if user["blackjack_sayisi"] >= 50:
+    if user.get("blackjack_sayisi", 0) >= 50:
         kazanilanlar.append("Blackjackçi")
 
-    if user["toplam_kazanc"] >= 100000:
+    if user.get("toplam_kazanc", 0) >= 100000:
         kazanilanlar.append("Zengin I")
 
-    if user["toplam_kazanc"] >= 1000000:
+    if user.get("toplam_kazanc", 0) >= 1000000:
         kazanilanlar.append("Zengin II")
 
-    if user["level"] >= 5:
+    if user.get("level", 0) >= 5:
         kazanilanlar.append("Level 5")
 
-    if user["level"] >= 10:
+    if user.get("level", 0) >= 10:
         kazanilanlar.append("Level 10")
 
-    if user["tamamlanan_gorev"] >= 5:
+    if user.get("tamamlanan_gorev", 0) >= 5:
         kazanilanlar.append("Görevci I")
 
-    if user["tamamlanan_gorev"] >= 20:
+    if user.get("tamamlanan_gorev", 0) >= 20:
         kazanilanlar.append("Görevci II")
 
-    if user["bosanma_sayisi"] >= 1:
+    if user.get("bosanma_sayisi", 0) >= 1:
         kazanilanlar.append("Boşanmış")
 
-    if user["banka"] >= 500000:
+    if user.get("banka", 0) >= 500000:
         kazanilanlar.append("Zengin Banka")
 
-    if user["para"] >= 1000000:
+    if user.get("para", 0) >= 1000000:
         kazanilanlar.append("Milyoner")
 
-    if user["toplam_kayip"] >= 10000000:
+    if user.get("toplam_kayip", 0) >= 10000000:
         kazanilanlar.append("10M Kayıp")
 
-    for rozet in kazanilanlar:
-        if rozet not in rozetler:
-            collection.update_one(
-                {"_id": str(user_id)},
-                {"$push": {"rozetler": rozet}}
-            )
+    # 🔥 TEKRAR EKLENMESİN DİYE FİLTRE
+    yeni_rozetler = [r for r in kazanilanlar if r not in rozetler]
+
+    if yeni_rozetler:
+        collection.update_one(
+            {"_id": str(user_id)},
+            {"$push": {"rozetler": {"$each": yeni_rozetler}}}
+        )
 
 
 
@@ -749,23 +750,23 @@ async def bankayatır(ctx, miktar: int):
 
 from discord.ui import View, Button
 
-@bot.command()
+@bot.command(name="yardım")
 @commands.cooldown(1, 4, commands.BucketType.user)
-async def yardım(ctx):
+async def yardim(ctx):
 
     ekonomi_embed = discord.Embed(
         title="💰 Ekonomi Komutları",
         description="""
-q!param → Paranızı gösterir
-q!paragönder @kişi miktar → Para gönderir
-q!hesap → Hesap bilgilerinizi gösterir
-q!level → Level & XP gösterir
-q!satınal <varlık> <miktar>
-q!sat <varlık> <miktar>
-q!ekonomi
-q!dilen
-q!gunluk
-q!maaş
+`q!param`
+`q!paragönder @kişi miktar`
+`q!hesap`
+`q!level`
+`q!satınal <varlık> <miktar>`
+`q!sat <varlık> <miktar>`
+`q!ekonomi`
+`q!dilen`
+`q!gunluk`
+`q!maaş`
 """,
         color=discord.Color.green()
     )
@@ -773,10 +774,10 @@ q!maaş
     kumar_embed = discord.Embed(
         title="🎲 Kumar Komutları",
         description="""
-q!cf miktar
-q!balıktut
-q!slot miktar
-q!blackjack miktar
+`q!cf miktar`
+`q!balıktut`
+`q!slot miktar`
+`q!blackjack miktar`
 """,
         color=discord.Color.red()
     )
@@ -784,9 +785,9 @@ q!blackjack miktar
     banka_embed = discord.Embed(
         title="🏦 Banka Komutları",
         description="""
-q!banka
-q!bankayatır miktar
-q!bankaçek miktar
+`q!banka`
+`q!bankayatır miktar`
+`q!bankaçek miktar`
 """,
         color=discord.Color.gold()
     )
@@ -794,8 +795,8 @@ q!bankaçek miktar
     meslek_embed = discord.Embed(
         title="💼 Meslek Komutları",
         description="""
-q!meslekler
-q!meslek al <meslek>
+`q!meslekler`
+`q!meslek al <meslek>`
 """,
         color=discord.Color.purple()
     )
@@ -803,44 +804,44 @@ q!meslek al <meslek>
     isletme_embed = discord.Embed(
         title="🏭 İşletme Komutları",
         description="""
-q!işletmeler
-q!işletmeal <isim> <miktar>
-q!işletmeyükselt <isim>
-q!işletmeparaçek
-q!işletmetop
-q!sigorta
+`q!işletmeler`
+`q!işletmeal <isim> <miktar>`
+`q!işletmeyükselt <isim>`
+`q!işletmeparaçek`
+`q!işletmetop`
+`q!sigorta`
 """,
         color=discord.Color.dark_teal()
     )
 
     rozet_embed = discord.Embed(
-        title="🏅 Rozetler & Görevler",
+        title="🏅 Rozet & Görev Komutları",
         description="""
 🎯 Görev:
-q!göreval
-q!görevler
+`q!göreval`
+`q!görevler`
 
 🏅 Rozet:
-q!rozetler
-q!rozetlerim
-q!hesaprozetekle <rozet adı>
+`q!rozetler`
+`q!rozetlerim`
+`q!hesaprozetekle <rozet adı>`
 """,
         color=discord.Color.orange()
     )
 
     diger_embed = discord.Embed(
-        title="📊 Diğer",
+        title="📊 Diğer Komutlar",
         description="""
-q!gzenginler
-q!szenginler
-q!soygun
-q!enflasyon
-q!kasaaç <KasaAdi>
-q!market
-q!envanter
-q!evlen @kullanıcı
-q!boşan
-q!davet
+`q!gzenginler`
+`q!szenginler`
+`q!soygun`
+`q!enflasyon`
+`q!kasaaç <KasaAdi>`
+`q!market`
+`q!envanter`
+`q!evlen @kullanıcı`
+`q!boşan`
+`q!davet`
 """,
         color=discord.Color.blurple()
     )
@@ -851,10 +852,7 @@ q!davet
     view = View(timeout=120)
 
     async def change_embed(interaction, embed):
-        if interaction.response.is_done():
-            await interaction.followup.edit_message(interaction.message.id, embed=embed, view=view)
-        else:
-            await interaction.response.edit_message(embed=embed, view=view)
+        await interaction.response.edit_message(embed=embed, view=view)
 
     ekonomi_button = Button(label="💰 Ekonomi", style=discord.ButtonStyle.green)
     kumar_button = Button(label="🎲 Kumar", style=discord.ButtonStyle.red)
@@ -3200,7 +3198,7 @@ async def işletmeparaçek(ctx):
 
 # EVLENME
 
-@bot.command()
+@bot.command(name="evlen")
 async def evlen(ctx, member: discord.Member):
 
     if member.id == ctx.author.id:
@@ -3247,22 +3245,29 @@ async def evlen(ctx, member: discord.Member):
             {"$set": {"married_to": ctx.author.id}}
         )
 
+        # 🔥 ROZET KONTROL
+        await rozet_kontrol(ctx.author.id)
+        await rozet_kontrol(member.id)
+
         await ctx.send("🎉 Tebrikler! Artık evlisiniz!")
     else:
         await ctx.send("❌ Evlilik teklifi reddedildi.")
 
 # BOŞAN
-@bot.command()
-async def boşan(ctx):
+@bot.command(name="boşan")
+async def bosan(ctx):
 
     user = get_user(ctx.author.id)
+
+    if not user:
+        return await ctx.send("❌ Kullanıcı verisi bulunamadı.")
 
     es_id = user.get("married_to")
 
     if not es_id:
         return await ctx.send("❌ Evli değilsin.")
 
-    es = get_user(es_id)
+    es_user = get_user(es_id)
 
     toplam_servet = user.get("para", 0) + user.get("banka", 0)
     tazminat = int(toplam_servet * 0.05)
@@ -3270,14 +3275,19 @@ async def boşan(ctx):
     if user.get("para", 0) < tazminat:
         return await ctx.send(f"❌ Boşanmak için {formatla(tazminat)} EwoCoin gerekiyor.")
 
+    # 💔 Boşanan kişi
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {
-            "$inc": {"para": -tazminat},
+            "$inc": {
+                "para": -tazminat,
+                "bosanma_sayisi": 1
+            },
             "$set": {"married_to": None}
         }
     )
 
+    # 💰 Eş
     collection.update_one(
         {"_id": str(es_id)},
         {
@@ -3286,7 +3296,13 @@ async def boşan(ctx):
         }
     )
 
-    await ctx.send(f"💔 Boşandınız. {formatla(tazminat)} EwoCoin tazminat ödendi.")
+    # 🔥 Rozet kontrol
+    await rozet_kontrol(ctx.author.id)
+
+    await ctx.send(
+        f"💔 {ctx.author.mention} boşandı.\n"
+        f"💸 {formatla(tazminat)} EwoCoin tazminat ödendi."
+    )
 
 # GÖREV AL
 @bot.command()
@@ -3347,18 +3363,23 @@ async def görevler(ctx):
 async def rozetlerim(ctx):
 
     user = get_user(ctx.author.id)
-
     rozetler = user.get("rozetler", [])
 
     if not rozetler:
         return await ctx.send("🏅 Henüz rozetin yok.")
 
-    text = "\n".join(rozetler)
+    text = "\n".join([f"🏅 {r}" for r in rozetler])
 
-    await ctx.send(f"🏅 Rozetlerin:\n{text}")
+    embed = discord.Embed(
+        title="🏅 Rozetlerin",
+        description=text,
+        color=discord.Color.orange()
+    )
+
+    await ctx.send(embed=embed)
 
 # AKTİF ROZET SEÇ
-@bot.command()
+@bot.command(name="hesaprozetekle")
 async def hesaprozetekle(ctx, *, rozet_adi):
 
     user = get_user(ctx.author.id)
@@ -3372,6 +3393,19 @@ async def hesaprozetekle(ctx, *, rozet_adi):
     )
 
     await ctx.send(f"👑 Aktif rozet ayarlandı: {rozet_adi}")
+
+@bot.command(name="rozetler")
+async def rozetler(ctx):
+
+    user = get_user(ctx.author.id)
+    rozetler = user.get("rozetler", [])
+
+    if not rozetler:
+        return await ctx.send("🏅 Henüz rozetin yok.")
+
+    text = "\n".join([f"🏅 {r}" for r in rozetler])
+
+    await ctx.send(f"🏅 Rozetlerin:\n{text}")
 
 
 
