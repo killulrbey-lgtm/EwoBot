@@ -2375,17 +2375,18 @@ class AdminMainView(discord.ui.View):
         )
 
 # =====================================================
-# 💰 EKONOMİ MODAL
+# EKONOMİ MODAL 1 (İlk 5 Varlık)
 # =====================================================
 
-class EkonomiDegistirModal(discord.ui.Modal, title="Ekonomi Güncelle"):
+class EkonomiDegistirModal1(discord.ui.Modal, title="Ekonomi Güncelle (1/2)"):
 
     def __init__(self):
         super().__init__(timeout=None)
 
         self.varliklar = list(varsayilan_varlikler.keys())
+        self.ilk_bes = self.varliklar[:5]
 
-        for varlik in self.varliklar:
+        for varlik in self.ilk_bes:
             data = economy_col.find_one({"_id": varlik})
             eski = data["current_price"] if data else varsayilan_varlikler[varlik]
 
@@ -2401,47 +2402,89 @@ class EkonomiDegistirModal(discord.ui.Modal, title="Ekonomi Güncelle"):
 
         await interaction.response.defer(ephemeral=True)
 
+        interaction.client.temp_ekonomi = {}
+
+        for i, varlik in enumerate(self.ilk_bes):
+            try:
+                yeni = int(self.children[i].value.replace(".", "").replace(",", ""))
+                interaction.client.temp_ekonomi[varlik] = yeni
+            except:
+                return await interaction.followup.send(
+                    f"❌ {varlik} için geçersiz sayı.",
+                    ephemeral=True
+                )
+
+        await interaction.followup.send_modal(EkonomiDegistirModal2())
+
+
+# =====================================================
+# EKONOMİ MODAL 2 (Son Varlık)
+# =====================================================
+
+class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        self.varlik = list(varsayilan_varlikler.keys())[5]
+
+        data = economy_col.find_one({"_id": self.varlik})
+        eski = data["current_price"] if data else varsayilan_varlikler[self.varlik]
+
+        self.add_item(
+            discord.ui.TextInput(
+                label=f"{self.varlik} (Eski: {formatla(eski)})",
+                default=str(eski),
+                required=True
+            )
+        )
+
+    async def on_submit(self, interaction: discord.Interaction):
+
+        try:
+            yeni = int(self.children[0].value.replace(".", "").replace(",", ""))
+            interaction.client.temp_ekonomi[self.varlik] = yeni
+        except:
+            return await interaction.response.send_message(
+                "❌ Geçersiz sayı girdiniz.",
+                ephemeral=True
+            )
+
         log_embed = discord.Embed(
             title="📊 Ekonomi Güncellendi",
             color=discord.Color.dark_blue()
         )
 
-        for i, varlik in enumerate(self.varliklar):
-
-            try:
-                yeni = parse_int(self.children[i].value)
-            except:
-                return await interaction.followup.send(
-                    f"❌ {varlik} için geçersiz sayı girdiniz.",
-                    ephemeral=True
-                )
+        for varlik, yeni_fiyat in interaction.client.temp_ekonomi.items():
 
             eski_data = economy_col.find_one({"_id": varlik})
             eski = eski_data["current_price"] if eski_data else 0
 
             economy_col.update_one(
                 {"_id": varlik},
-                {"$set": {"current_price": yeni}},
+                {"$set": {"current_price": yeni_fiyat}},
                 upsert=True
             )
 
-            fark = yeni - eski
+            fark = yeni_fiyat - eski
             durum = "🟢 Artış" if fark > 0 else "🔴 Düşüş" if fark < 0 else "⚪ Değişim yok"
 
             log_embed.add_field(
                 name=f"{varlik} ({durum})",
-                value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni)}",
+                value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni_fiyat)}",
                 inline=False
             )
-
-        if bot.user.avatar:
-            log_embed.set_thumbnail(url=bot.user.avatar.url)
 
         kanal = bot.get_channel(EKONOMI_LOG_KANAL)
         if kanal:
             await kanal.send(embed=log_embed)
 
-        await interaction.followup.send("✅ Ekonomi başarıyla güncellendi.", ephemeral=True)
+        del interaction.client.temp_ekonomi
+
+        await interaction.response.send_message(
+            "✅ Ekonomi başarıyla güncellendi.",
+            ephemeral=True
+        )
 
 # =====================================================
 # EKONOMİ VIEW
