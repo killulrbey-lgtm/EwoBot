@@ -2374,7 +2374,7 @@ class AdminMainView(discord.ui.View):
             view=BakimView()
         )
 
-# =====================================================
+## =====================================================
 # EKONOMİ MODAL 1 (İlk 5 Varlık)
 # =====================================================
 
@@ -2388,40 +2388,41 @@ class EkonomiDegistirModal1(discord.ui.Modal, title="Ekonomi Güncelle (1/2)"):
 
         for varlik in self.ilk_bes:
             data = economy_col.find_one({"_id": varlik})
-            eski = data["current_price"] if data else varsayilan_varlikler[varlik]
+            eski = data["current_price"] if data else varsayilan_varlikler.get(varlik, 0)
 
             self.add_item(
                 discord.ui.TextInput(
                     label=f"{varlik} (Eski: {formatla(eski)})",
                     default=str(eski),
-                    required=True
+                    required=True,
+                    max_length=20
                 )
             )
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        # Eğer yoksa oluştur
-        if not hasattr(interaction.client, "ekonomi_gecici_veri"):
-            interaction.client.ekonomi_gecici_veri = {}
+        # Geçici veri oluştur
+        if not hasattr(interaction.client, "ekonomi_temp"):
+            interaction.client.ekonomi_temp = {}
 
-        interaction.client.ekonomi_gecici_veri[interaction.user.id] = {}
+        interaction.client.ekonomi_temp[interaction.user.id] = {}
 
         for i, varlik in enumerate(self.ilk_bes):
             try:
-                yeni = int(self.children[i].value.replace(".", "").replace(",", ""))
-                interaction.client.ekonomi_gecici_veri[interaction.user.id][varlik] = yeni
+                yeni = int(self.children[i].value.replace(".", "").replace(",", "").strip())
+                interaction.client.ekonomi_temp[interaction.user.id][varlik] = yeni
             except:
-                await interaction.response.send_message(
+                return await interaction.response.send_message(
                     f"❌ {varlik} için geçersiz sayı girdiniz.",
                     ephemeral=True
                 )
-                return
 
+        # Modal 2 aç
         await interaction.response.send_modal(EkonomiDegistirModal2())
 
 
 # =====================================================
-# EKONOMİ MODAL 2 (Son Varlık)
+# EKONOMİ MODAL 2 (Kalan Varlıklar)
 # =====================================================
 
 class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
@@ -2429,34 +2430,49 @@ class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
     def __init__(self):
         super().__init__(timeout=None)
 
-        self.varlik = list(varsayilan_varlikler.keys())[5]
+        self.varliklar = list(varsayilan_varlikler.keys())[5:]
 
-        data = economy_col.find_one({"_id": self.varlik})
-        eski = data["current_price"] if data else varsayilan_varlikler[self.varlik]
+        # Kalan varlıkları metin olarak göster
+        aciklama = ""
+        for varlik in self.varliklar:
+            data = economy_col.find_one({"_id": varlik})
+            eski = data["current_price"] if data else varsayilan_varlikler.get(varlik, 0)
+            aciklama += f"{varlik} = {eski}\n"
 
         self.add_item(
             discord.ui.TextInput(
-                label=f"{self.varlik} (Eski: {formatla(eski)})",
-                default=str(eski),
-                required=True
+                label="Kalan Varlıklar (örnek: Altin=5000)",
+                style=discord.TextStyle.paragraph,
+                default=aciklama,
+                required=True,
+                max_length=2000
             )
         )
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        # Güvenlik kontrolü
-        if not hasattr(interaction.client, "ekonomi_gecici_veri"):
+        if not hasattr(interaction.client, "ekonomi_temp"):
             return await interaction.response.send_message(
                 "❌ Oturum verisi bulunamadı. Tekrar deneyin.",
                 ephemeral=True
             )
 
         try:
-            yeni = int(self.children[0].value.replace(".", "").replace(",", ""))
-            interaction.client.ekonomi_gecici_veri[interaction.user.id][self.varlik] = yeni
+            girilen = self.children[0].value.split("\n")
+
+            for satir in girilen:
+                if "=" not in satir:
+                    continue
+
+                varlik, fiyat = satir.split("=")
+                varlik = varlik.strip()
+                fiyat = int(fiyat.replace(".", "").replace(",", "").strip())
+
+                interaction.client.ekonomi_temp[interaction.user.id][varlik] = fiyat
+
         except:
             return await interaction.response.send_message(
-                "❌ Geçersiz sayı girdiniz.",
+                "❌ Format hatası. Örnek: Altin=5000",
                 ephemeral=True
             )
 
@@ -2465,7 +2481,8 @@ class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
             color=discord.Color.dark_blue()
         )
 
-        for varlik, yeni_fiyat in interaction.client.ekonomi_gecici_veri[interaction.user.id].items():
+        # Güncelleme
+        for varlik, yeni_fiyat in interaction.client.ekonomi_temp[interaction.user.id].items():
 
             eski_data = economy_col.find_one({"_id": varlik})
             eski = eski_data["current_price"] if eski_data else 0
@@ -2479,33 +2496,34 @@ class EkonomiDegistirModal2(discord.ui.Modal, title="Ekonomi Güncelle (2/2)"):
             fark = yeni_fiyat - eski
 
             if fark > 0:
-                emoji = "🟢"
-                baslik = f"{emoji} {varlik} (Toplam +{formatla(fark)} arttı)"
+                durum = f"🟢 +{formatla(fark)}"
             elif fark < 0:
-                emoji = "🔴"
-                baslik = f"{emoji} {varlik} (Toplam -{formatla(abs(fark))} indi)"
+                durum = f"🔴 -{formatla(abs(fark))}"
             else:
-                emoji = "⚪"
-                baslik = f"{emoji} {varlik} (Değişim yok)"
+                durum = "⚪ Değişim yok"
 
             embed.add_field(
-                name=baslik,
+                name=f"{varlik} ({durum})",
                 value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni_fiyat)}",
                 inline=False
             )
 
-        embed.set_thumbnail(url=interaction.client.user.avatar.url)
+        # Avatar güvenli
+        if interaction.client.user.avatar:
+            embed.set_thumbnail(url=interaction.client.user.avatar.url)
+
         embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
 
+        # Log kanalı
         kanal = interaction.client.get_channel(EKONOMI_LOG_KANAL)
         if kanal:
             await kanal.send(embed=embed)
 
-        # Hafızayı temizle
-        interaction.client.ekonomi_gecici_veri.pop(interaction.user.id, None)
+        # Geçici veriyi temizle
+        interaction.client.ekonomi_temp.pop(interaction.user.id, None)
 
         await interaction.response.send_message(
-            "✅ Ekonomi manuel olarak güncellendi.",
+            "✅ Ekonomi başarıyla güncellendi.",
             ephemeral=True
         )
 
