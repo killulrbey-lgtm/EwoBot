@@ -1142,7 +1142,6 @@ async def davet(ctx):
         "Botu sunucuna eklemek için aşağıdaki butona tıkla:",
         view=view
     )
-    )
 
 # ------------------- GLOBAL / SUNUCU ÖZEL AYARLARI -------------------
 DESTEK_SUNUCU_ID = 1471843922115301493
