@@ -130,6 +130,25 @@ def get_user(user_id):
                 "level": 1,
                 "son_maas": 0,
                 "son_gunluk": 0,
+
+                # 📊 İstatistikler
+                "cf_sayisi": 0,
+                "slot_sayisi": 0,
+                "blackjack_sayisi": 0,
+                "toplam_kazanc": 0,
+                "toplam_kayip": 0,
+                "bosanma_sayisi": 0,
+
+                # 🎯 Görev
+                "aktif_gorev": None,
+                "gorev_progress": 0,
+                "tamamlanan_gorev": 0,
+
+                # 🏅 Rozet
+                "rozetler": [],
+                "aktif_rozet": None,
+
+                # 📦 Envanter
                 "envanter": {
                     "Bronz Kasa": 0,
                     "Gümüş Kasa": 0,
@@ -139,8 +158,11 @@ def get_user(user_id):
                     "EwoPlus Kasa": 0,
                     "Silah": 0,
                     "Özel Koruma": 0,
-                    "Olta": 0
+                    "Olta": 0,
+                    "Yüzük": 0
                 },
+
+                # 💎 Yatırımlar
                 "yatirimlar": {
                     "Altın": 0,
                     "Plus": 0,
@@ -148,14 +170,16 @@ def get_user(user_id):
                     "Elmas": 0,
                     "Dolar": 0,
                     "Gümüş": 0
-                }
+                },
+
+                # 🏭 İşletmeler
+                "isletmeler": {}
             }
         },
         upsert=True,
         return_document=ReturnDocument.AFTER
     )
 
-# XP SİSTEMİ
 async def xp_ekle(user_id, miktar):
 
     user = get_user(user_id)
@@ -164,22 +188,182 @@ async def xp_ekle(user_id, miktar):
     level = user.get("level", 1)
 
     xp += miktar
-    gereken = level * 100
+    gereken = level * 500
 
     while xp >= gereken:
         xp -= gereken
         level += 1
-        gereken = level * 100
+        gereken = level * 500
+
+        # Level atlama ödülü
+        collection.update_one(
+            {"_id": str(user_id)},
+            {"$inc": {"para": level * 1000}}
+        )
 
     collection.update_one(
         {"_id": str(user_id)},
-        {
-            "$set": {
-                "xp": xp,
-                "level": level
-            }
-        }
+        {"$set": {"xp": xp, "level": level}}
     )
+
+GOREVLER = [
+
+    {"id": "cf_25", "ad": "Kumarbaz I", "tip": "cf", "hedef": 25, "xp": 200},
+    {"id": "cf_100", "ad": "Kumarbaz II", "tip": "cf", "hedef": 100, "xp": 500},
+
+    {"id": "slot_50", "ad": "Slot Ustası I", "tip": "slot", "hedef": 50, "xp": 250},
+    {"id": "slot_200", "ad": "Slot Ustası II", "tip": "slot", "hedef": 200, "xp": 600},
+
+    {"id": "bj_50", "ad": "Blackjackçi I", "tip": "blackjack", "hedef": 50, "xp": 300},
+
+    {"id": "kazanc_100k", "ad": "100K Kazan", "tip": "kazanc", "hedef": 100000, "xp": 400},
+    {"id": "kazanc_1m", "ad": "1M Kazan", "tip": "kazanc", "hedef": 1000000, "xp": 1000},
+
+    {"id": "maas_20", "ad": "Maaş Bağımlısı", "tip": "maas", "hedef": 20, "xp": 300},
+
+    {"id": "gunluk_30", "ad": "Günlük Toplayıcı", "tip": "gunluk", "hedef": 30, "xp": 400},
+
+    {"id": "isletme_10", "ad": "İşletme Patronu I", "tip": "isletme", "hedef": 10, "xp": 500},
+
+]
+
+async def gorev_kontrol(user_id, tip, artis):
+
+    user = get_user(user_id)
+
+    aktif = user.get("aktif_gorev")
+
+    if not aktif:
+        return
+
+    if aktif["tip"] != tip:
+        return
+
+    yeni = user.get("gorev_progress", 0) + artis
+
+    if yeni >= aktif["hedef"]:
+
+        await xp_ekle(user_id, aktif["xp"])
+
+        collection.update_one(
+            {"_id": str(user_id)},
+            {
+                "$set": {
+                    "aktif_gorev": None,
+                    "gorev_progress": 0
+                },
+                "$inc": {
+                    "tamamlanan_gorev": 1
+                }
+            }
+        )
+
+    else:
+        collection.update_one(
+            {"_id": str(user_id)},
+            {"$set": {"gorev_progress": yeni}}
+        )
+
+ROZETLER = {
+
+    "Kumarbaz I": "25 CF oynayın",
+    "Kumarbaz II": "100 CF oynayın",
+    "Slotçu I": "50 slot oynayın",
+    "Slotçu II": "200 slot oynayın",
+    "Blackjackçi": "50 blackjack oynayın",
+    "Zengin I": "100.000 kazan",
+    "Zengin II": "1.000.000 kazan",
+    "Maaşçı": "20 maaş al",
+    "Günlükcü": "30 günlük al",
+    "Patron": "10 işletme geliri topla",
+
+    "Level 5": "Level 5 ol",
+    "Level 10": "Level 10 ol",
+    "Level 20": "Level 20 ol",
+    "Level 30": "Level 30 ol",
+
+    "Görevci I": "5 görev tamamla",
+    "Görevci II": "20 görev tamamla",
+
+    "Boşanmış": "1 kez boşan",
+    "Zengin Banka": "500K banka",
+    "Milyoner": "1M nakit",
+
+    "CF 500": "500 CF oynayın",
+    "Slot 500": "500 Slot oynayın",
+    "BJ 200": "200 Blackjack oynayın",
+
+    "10M Kazanç": "10M toplam kazanç",
+    "10M Kayıp": "10M kayıp",
+
+    "Seviye 50": "Level 50 ol",
+    "Seviye 75": "Level 75 ol",
+    "Seviye 100": "Level 100 ol",
+
+    "Ultra Zengin": "50M servet",
+    "Koleksiyoncu": "10 rozet kazan"
+}
+
+async def rozet_kontrol(user_id):
+
+    user = get_user(user_id)
+    rozetler = user.get("rozetler", [])
+
+    kazanilanlar = []
+
+    if user["cf_sayisi"] >= 25:
+        kazanilanlar.append("Kumarbaz I")
+
+    if user["cf_sayisi"] >= 100:
+        kazanilanlar.append("Kumarbaz II")
+
+    if user["slot_sayisi"] >= 50:
+        kazanilanlar.append("Slotçu I")
+
+    if user["slot_sayisi"] >= 200:
+        kazanilanlar.append("Slotçu II")
+
+    if user["blackjack_sayisi"] >= 50:
+        kazanilanlar.append("Blackjackçi")
+
+    if user["toplam_kazanc"] >= 100000:
+        kazanilanlar.append("Zengin I")
+
+    if user["toplam_kazanc"] >= 1000000:
+        kazanilanlar.append("Zengin II")
+
+    if user["level"] >= 5:
+        kazanilanlar.append("Level 5")
+
+    if user["level"] >= 10:
+        kazanilanlar.append("Level 10")
+
+    if user["tamamlanan_gorev"] >= 5:
+        kazanilanlar.append("Görevci I")
+
+    if user["tamamlanan_gorev"] >= 20:
+        kazanilanlar.append("Görevci II")
+
+    if user["bosanma_sayisi"] >= 1:
+        kazanilanlar.append("Boşanmış")
+
+    if user["banka"] >= 500000:
+        kazanilanlar.append("Zengin Banka")
+
+    if user["para"] >= 1000000:
+        kazanilanlar.append("Milyoner")
+
+    if user["toplam_kayip"] >= 10000000:
+        kazanilanlar.append("10M Kayıp")
+
+    for rozet in kazanilanlar:
+        if rozet not in rozetler:
+            collection.update_one(
+                {"_id": str(user_id)},
+                {"$push": {"rozetler": rozet}}
+            )
+
+
 
 def global_toplam_para():
     pipeline = [
@@ -287,6 +471,7 @@ MAX_BET = 100000
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def cf(ctx, miktar: str):
 
+    MAX_BET = 100000
     user = get_user(ctx.author.id)
 
     if miktar.lower() == "all":
@@ -294,39 +479,59 @@ async def cf(ctx, miktar: str):
     else:
         if not miktar.isdigit():
             return await ctx.send("❌ Geçerli bir miktar gir.")
-
         miktar = int(miktar)
-
-    if miktar > MAX_BET:
-        return await ctx.send("❌ En fazla 100.000 EwoCoin ile oynayabilirsin.")
 
     if miktar <= 0:
         return await ctx.send("❌ Geçerli bir miktar gir.")
 
+    if miktar > MAX_BET:
+        return await ctx.send("❌ En fazla 100.000 oynayabilirsin.")
+
     if user["para"] < miktar:
-        return await ctx.send("❌ Yeterli paran yok.")
+        return await ctx.send("❌ Paran yetmiyor.")
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": -miktar}}
     )
 
-    await ctx.send(f"🪙 {ctx.author.mention} {formatla(miktar)} EwoCoin ile yazı tura oynuyor...")
+    await ctx.send(f"🪙 {formatla(miktar)} ile yazı tura atılıyor...")
     await asyncio.sleep(2)
 
-    if random.choice([True, False]):
+    kazandi = random.choice([True, False])
+
+    if kazandi:
         kazanc = miktar * 2
 
         collection.update_one(
             {"_id": str(ctx.author.id)},
-            {"$inc": {"para": kazanc}}
+            {
+                "$inc": {
+                    "para": kazanc,
+                    "cf_sayisi": 1,
+                    "toplam_kazanc": kazanc
+                }
+            }
         )
 
-        await ctx.send(f"🎉 Kazandın! +{formatla(kazanc)} EwoCoin")
+        await ctx.send(f"🎉 Kazandın! +{formatla(kazanc)}")
+
     else:
-        await ctx.send(f"💀 Kaybettin! -{formatla(miktar)} EwoCoin")
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {
+                "$inc": {
+                    "cf_sayisi": 1,
+                    "toplam_kayip": miktar
+                }
+            }
+        )
+
+        await ctx.send(f"💀 Kaybettin! -{formatla(miktar)}")
 
     await xp_ekle(ctx.author.id, 5)
+    await gorev_kontrol(ctx.author.id, "cf", 1)
+    await rozet_kontrol(ctx.author.id)
 
 # level sistemi
 @bot.command()
@@ -387,49 +592,39 @@ async def slot(ctx, miktar):
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$inc": {"para": -miktar}}
+        {"$inc": {"para": -miktar, "slot_sayisi": 1}}
     )
 
     msg = await ctx.send("🎰 Slot dönüyor...")
     await asyncio.sleep(2)
 
     emojis = ["🍒", "🍋", "🍉", "⭐"]
-    ihtimal = random.randint(1, 100)
+    result = random.sample(emojis, 3)
     kazanc = 0
 
-    if ihtimal <= 20:
-        sembol = random.choice(emojis)
-        result = [sembol, sembol, sembol]
+    if result[0] == result[1] == result[2]:
         kazanc = miktar * 3
-
-    elif ihtimal <= 55:
-        sembol = random.choice(emojis)
-        farkli = random.choice([e for e in emojis if e != sembol])
-        result = [sembol, sembol, farkli]
-        random.shuffle(result)
+    elif len(set(result)) == 2:
         kazanc = miktar * 2
-
-    else:
-        result = random.sample(emojis, 3)
-
-        if random.randint(1, 100) <= 30:
-            kazanc = miktar
-        else:
-            kazanc = 0
-
-    sonuc = " | ".join(result)
 
     if kazanc > 0:
         collection.update_one(
             {"_id": str(ctx.author.id)},
-            {"$inc": {"para": kazanc}}
+            {"$inc": {"para": kazanc, "toplam_kazanc": kazanc}}
         )
         text = f"🎉 Kazandın! +{formatla(kazanc)}"
     else:
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"toplam_kayip": miktar}}
+        )
         text = "💀 Kaybettin."
 
-    await msg.edit(content=f"{sonuc}\n{text}")
+    await msg.edit(content=f"{' | '.join(result)}\n{text}")
+
     await xp_ekle(ctx.author.id, 5)
+    await gorev_kontrol(ctx.author.id, "slot", 1)
+    await rozet_kontrol(ctx.author.id)
 
 # MAAŞ 
 @bot.command(name="maaş")
@@ -558,13 +753,14 @@ from discord.ui import View, Button
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def yardım(ctx):
 
+    # 💰 EKONOMİ
     ekonomi_embed = discord.Embed(
         title="💰 Ekonomi Komutları",
         description="""
 q!param → Paranızı gösterir
 q!paragönder @kişi miktar → Para gönderir
 q!hesap → Hesap bilgilerinizi gösterir
-q!level → Hesap Levelinizi gösterir
+q!level → Level & XP gösterir
 q!satınal <varlık> <miktar> → Varlık satın alır
 q!sat <varlık> <miktar> → Varlık satar
 q!ekonomi → Ekonomi durumunu gösterir
@@ -575,17 +771,19 @@ q!maaş → Maaşınızı yatırır
         color=discord.Color.green()
     )
 
+    # 🎲 KUMAR
     kumar_embed = discord.Embed(
         title="🎲 Kumar Komutları",
         description="""
 q!cf miktar → Yazı tura
-q!balıktut → Balık Oyunu
+q!balıktut → Balık oyunu
 q!slot miktar → Slot oyunu
-q!blackjack miktar → Blackjack oyunu
+q!blackjack miktar → Blackjack
 """,
         color=discord.Color.red()
     )
 
+    # 🏦 BANKA
     banka_embed = discord.Embed(
         title="🏦 Banka Komutları",
         description="""
@@ -596,6 +794,7 @@ q!bankaçek miktar → Bankadan para çek
         color=discord.Color.gold()
     )
 
+    # 💼 MESLEK
     meslek_embed = discord.Embed(
         title="💼 Meslek Komutları",
         description="""
@@ -605,37 +804,55 @@ q!meslek al <meslek> → Meslek satın al
         color=discord.Color.purple()
     )
 
+    # 🏭 İŞLETME
     isletme_embed = discord.Embed(
         title="🏭 İşletme Komutları",
         description="""
 q!işletmeler → Tüm işletmeleri gösterir
 q!işletmeal <isim> <miktar> → İşletme satın al
 q!işletmeyükselt <isim> → İşletmeni yükselt
-q!işletmeparaçek → Biriken geliri toplar
-q!işletmetop → Global en büyük sanayiciler
-q!sigorta → 24 saatlik sigorta al
+q!işletmeparaçek → Geliri toplar
+q!işletmetop → Global sıralama
+q!sigorta → 24 saatlik sigorta
 """,
         color=discord.Color.dark_teal()
     )
 
+    # 🏅 ROZET & GÖREV
+    rozet_gorev_embed = discord.Embed(
+        title="🏅 Rozetler & Görevler",
+        description="""
+🎯 Görev Komutları:
+q!göreval → Rastgele zor görev alır
+q!görevler → Aktif görevini gösterir
+
+🏅 Rozet Komutları:
+q!rozetler → Tüm rozetleri ve kazanma şartlarını gösterir
+q!rozetlerim → Sahip olduğun rozetleri gösterir
+q!hesaprozetekle <rozet adı> → Hesapta görünecek rozeti seçer
+""",
+        color=discord.Color.orange()
+    )
+
+    # 📊 DİĞER
     diger_embed = discord.Embed(
         title="📊 Diğer Komutlar",
         description="""
 q!gzenginler → Global en zenginler
-q!szenginler → Sunucudaki en zenginler
-q!soygun → Başka kullanıcıyı soygun yap
-q!enflasyon → Toplam EwoCoin miktarı
-q!kasaaç <Kasaadi> → Kasa açar
+q!szenginler → Sunucu en zenginler
+q!soygun → Kullanıcı soygun
+q!enflasyon → Toplam EwoCoin
+q!kasaaç <KasaAdi> → Kasa aç
 q!market → Marketi gösterir
 q!envanter → Envanteri gösterir
-q!evlen @kullanıcı → Evlilik teklifi gönderir
-q!boşan → Evliliği bitirir
-q!davet → Botu sunucuna ekle
+q!evlen @kullanıcı → Evlilik teklifi
+q!boşan → Servetin %5'i tazminat öder
+q!davet → Botu ekle
 """,
         color=discord.Color.blurple()
     )
 
-    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, diger_embed]:
+    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, rozet_gorev_embed, diger_embed]:
         e.set_footer(text="EwoBot Yardım Menüsü")
 
     view = View(timeout=None)
@@ -645,6 +862,7 @@ q!davet → Botu sunucuna ekle
     banka_button = Button(label="🏦 Banka", style=discord.ButtonStyle.blurple)
     meslek_button = Button(label="💼 Meslek", style=discord.ButtonStyle.gray)
     isletme_button = Button(label="🏭 İşletmeler", style=discord.ButtonStyle.green)
+    rozet_button = Button(label="🏅 Rozet & Görev", style=discord.ButtonStyle.orange)
     diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
 
     async def ekonomi_callback(interaction):
@@ -662,6 +880,9 @@ q!davet → Botu sunucuna ekle
     async def isletme_callback(interaction):
         await interaction.response.edit_message(embed=isletme_embed, view=view)
 
+    async def rozet_callback(interaction):
+        await interaction.response.edit_message(embed=rozet_gorev_embed, view=view)
+
     async def diger_callback(interaction):
         await interaction.response.edit_message(embed=diger_embed, view=view)
 
@@ -670,6 +891,7 @@ q!davet → Botu sunucuna ekle
     banka_button.callback = banka_callback
     meslek_button.callback = meslek_callback
     isletme_button.callback = isletme_callback
+    rozet_button.callback = rozet_callback
     diger_button.callback = diger_callback
 
     view.add_item(ekonomi_button)
@@ -677,6 +899,7 @@ q!davet → Botu sunucuna ekle
     view.add_item(banka_button)
     view.add_item(meslek_button)
     view.add_item(isletme_button)
+    view.add_item(rozet_button)
     view.add_item(diger_button)
 
     await ctx.send(embed=ekonomi_embed, view=view)
@@ -763,15 +986,15 @@ async def hesap(ctx):
     embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=formatla(faiz), inline=False)
 
     # Aktif Rozet
-    aktif_rozet = user.get("active_badge")
+    aktif_rozet = user.get("aktif_rozet")
     if aktif_rozet:
-        embed.add_field(name="🏅 Aktif Rozet", value=aktif_rozet, inline=False)
+        embed.add_field(name="👑 Aktif Rozet", value=aktif_rozet, inline=False)
 
     # Eş
     es_id = user.get("married_to")
     if es_id:
         try:
-            es_user = await bot.fetch_user(es_id)
+            es_user = await bot.fetch_user(int(es_id))
             embed.add_field(name="💍 Eşi", value=es_user.name, inline=False)
         except:
             embed.add_field(name="💍 Eşi", value="Bilinmiyor", inline=False)
@@ -869,7 +1092,7 @@ async def blackjack(ctx, miktar: str = None):
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$inc": {"para": -miktar}}
+        {"$inc": {"para": -miktar, "blackjack_sayisi": 1}}
     )
 
     msg = await ctx.send("🃏 Kartlar Dağıtılıyor...")
@@ -894,19 +1117,14 @@ async def blackjack(ctx, miktar: str = None):
         bot_kart.append(random.choice(kartlar))
         bot_toplam = toplam(bot_kart)
 
-    mesaj = (
-        "🃏 **Blackjack**\n\n"
-        f"👤 Sen: {oyuncu} → {oyuncu_toplam}\n"
-        f"🤖 Bot: {bot_kart} → {bot_toplam}\n\n"
-    )
-
     if oyuncu_toplam > 21:
         sonuc = "💀 Battın! Kaybettin."
+        collection.update_one({"_id": str(ctx.author.id)}, {"$inc": {"toplam_kayip": miktar}})
     elif bot_toplam > 21 or oyuncu_toplam > bot_toplam:
         kazanc = miktar * 2
         collection.update_one(
             {"_id": str(ctx.author.id)},
-            {"$inc": {"para": kazanc}}
+            {"$inc": {"para": kazanc, "toplam_kazanc": kazanc}}
         )
         sonuc = f"🎉 Kazandın! +{formatla(kazanc)}"
     elif oyuncu_toplam == bot_toplam:
@@ -917,10 +1135,20 @@ async def blackjack(ctx, miktar: str = None):
         sonuc = "🤝 Berabere! Paran iade edildi."
     else:
         sonuc = "💀 Kaybettin."
+        collection.update_one({"_id": str(ctx.author.id)}, {"$inc": {"toplam_kayip": miktar}})
+
+    mesaj = (
+        "🃏 **Blackjack**\n\n"
+        f"👤 Sen: {oyuncu} → {oyuncu_toplam}\n"
+        f"🤖 Bot: {bot_kart} → {bot_toplam}\n\n"
+        f"{sonuc}"
+    )
+
+    await msg.edit(content=mesaj)
 
     await xp_ekle(ctx.author.id, 5)
-
-    await msg.edit(content=mesaj + sonuc)
+    await gorev_kontrol(ctx.author.id, "blackjack", 1)
+    await rozet_kontrol(ctx.author.id)
 
 # ================== EKONOMİ KOMUTU ==================
 
@@ -3084,6 +3312,91 @@ async def boşan(ctx):
     )
 
     await ctx.send(f"💔 Boşandınız. {formatla(tazminat)} EwoCoin tazminat ödendi.")
+
+# GÖREV AL
+@bot.command()
+async def göreval(ctx):
+
+    user = get_user(ctx.author.id)
+
+    if user.get("aktif_gorev"):
+        return await ctx.send("❌ Zaten aktif görevin var.")
+
+    gorev_listesi = GOREVLER.copy()
+
+    # işletme yoksa işletme görevini çıkar
+    if not user.get("isletmeler"):
+        gorev_listesi = [g for g in gorev_listesi if g["tip"] != "isletme"]
+
+    secilen = random.choice(gorev_listesi)
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$set": {
+                "aktif_gorev": secilen,
+                "gorev_progress": 0
+            }
+        }
+    )
+
+    await ctx.send(
+        f"🎯 Yeni Görev:\n"
+        f"{secilen['ad']}\n"
+        f"Hedef: {secilen['hedef']}\n"
+        f"Ödül: {secilen['xp']} XP"
+    )
+
+# AKTİF GÖREV GÖR
+@bot.command()
+async def görevler(ctx):
+
+    user = get_user(ctx.author.id)
+
+    aktif = user.get("aktif_gorev")
+
+    if not aktif:
+        return await ctx.send("📭 Aktif görevin yok.")
+
+    progress = user.get("gorev_progress", 0)
+
+    await ctx.send(
+        f"🎯 Aktif Görev: {aktif['ad']}\n"
+        f"İlerleme: {progress} / {aktif['hedef']}\n"
+        f"Ödül: {aktif['xp']} XP"
+    )
+
+
+# ROZETLERİM 
+@bot.command()
+async def rozetlerim(ctx):
+
+    user = get_user(ctx.author.id)
+
+    rozetler = user.get("rozetler", [])
+
+    if not rozetler:
+        return await ctx.send("🏅 Henüz rozetin yok.")
+
+    text = "\n".join(rozetler)
+
+    await ctx.send(f"🏅 Rozetlerin:\n{text}")
+
+# AKTİF ROZET SEÇ
+@bot.command()
+async def hesaprozetekle(ctx, *, rozet_adi):
+
+    user = get_user(ctx.author.id)
+
+    if rozet_adi not in user.get("rozetler", []):
+        return await ctx.send("❌ Böyle bir rozete sahip değilsin.")
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$set": {"aktif_rozet": rozet_adi}}
+    )
+
+    await ctx.send(f"👑 Aktif rozet ayarlandı: {rozet_adi}")
 
 
 
