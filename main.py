@@ -2045,14 +2045,13 @@ async def logpanel(ctx):
 
     await ctx.send("⚙️ Admin Log Paneli", view=view)
 
-# Sunucuya eklenme logu (ekleyen kişinin ismi eklendi)
 MILESTONES = {
-    21: 1,
-    50: 5000,
-    100: 10000,
-    200: 20000,
-    500: 30000,
-    1000: 40000
+    25: 5000,
+    50: 10000,
+    100: 20000,
+    200: 30000,
+    500: 40000,
+    1000: 50000
 }
 
 MILESTONE_KANAL = 1474728861920137276
@@ -2061,16 +2060,33 @@ BOT_LOG_KANAL = 1474500594554372247
 
 @bot.event
 async def on_guild_join(guild):
-
     await bot.wait_until_ready()
 
     toplam = len(bot.guilds)
-
     print(f"Yeni sunucu: {guild.name} | Toplam: {toplam}")
 
-    try:
-        kanal = await bot.fetch_channel(MILESTONE_KANAL)
-    except:
+    # ✅ HER SUNUCU EKLENİNCE LOG
+    log_kanal = bot.get_channel(BOT_LOG_KANAL)
+    if log_kanal:
+        try:
+            embed = discord.Embed(
+                title="✅ EwoBot Yeni Sunucuya Eklendi",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Sunucu", value=guild.name, inline=False)
+            embed.add_field(name="Sunucu ID", value=guild.id, inline=False)
+            embed.add_field(name="Toplam Sunucu", value=toplam, inline=False)
+
+            await log_kanal.send(embed=embed)
+        except Exception as e:
+            print(f"Log gönderme hatası: {e}")
+    else:
+        print("BOT_LOG_KANAL bulunamadı veya cache'de değil.")
+
+    # ✅ MILESTONE KONTROL
+    milestone_kanal = bot.get_channel(MILESTONE_KANAL)
+
+    if not milestone_kanal:
         print("Milestone kanalı bulunamadı.")
         return
 
@@ -2084,16 +2100,18 @@ async def on_guild_join(guild):
     # Eğer yeni bir rekor kırıldıysa
     if toplam > last_reached:
 
-        # milestone'ları sırayla kontrol et
         for hedef, odul in sorted(MILESTONES.items()):
 
             if last_reached < hedef <= toplam:
 
-                print(f"Milestone tetiklendi: {hedef}")
+                print(f"🎯 Milestone tetiklendi: {hedef}")
 
-                # 🎁 Ödül yatır
-                result = collection.update_many({}, {"$inc": {"banka": odul}})
-                print(f"Ödül yatırıldı: {result.modified_count} kullanıcı")
+                try:
+                    # 🎁 Ödül yatır
+                    result = collection.update_many({}, {"$inc": {"banka": odul}})
+                    print(f"Ödül yatırıldı: {result.modified_count} kullanıcı")
+                except Exception as e:
+                    print(f"Ödül yatırma hatası: {e}")
 
                 # SON 20 SUNUCU
                 guild_list = [g.name for g in bot.guilds]
@@ -2119,7 +2137,10 @@ async def on_guild_join(guild):
 
                 embed.set_footer(text="EwoBot Milestone Sistemi")
 
-                await kanal.send(embed=embed)
+                try:
+                    await milestone_kanal.send(embed=embed)
+                except Exception as e:
+                    print(f"Milestone mesaj hatası: {e}")
 
                 # last_reached güncelle
                 settings_col.update_one(
@@ -2130,11 +2151,13 @@ async def on_guild_join(guild):
 
         print("Milestone kontrol tamamlandı.")
 
+
 @bot.event
 async def on_guild_remove(guild):
 
     kanal = bot.get_channel(BOT_LOG_KANAL)
     if not kanal:
+        print("BOT_LOG_KANAL bulunamadı.")
         return
 
     embed = discord.Embed(
@@ -2146,7 +2169,10 @@ async def on_guild_remove(guild):
     embed.add_field(name="Sunucu ID", value=guild.id, inline=False)
     embed.add_field(name="Kalan Sunucu Sayısı", value=len(bot.guilds), inline=False)
 
-    await kanal.send(embed=embed)
+    try:
+        await kanal.send(embed=embed)
+    except Exception as e:
+        print(f"Sunucudan çıkış log hatası: {e}")
 
 # Mesaj silme
 @bot.event
