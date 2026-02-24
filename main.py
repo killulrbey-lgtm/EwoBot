@@ -603,23 +603,23 @@ async def level(ctx):
 
 @bot.command()
 @commands.cooldown(1, 15, commands.BucketType.user)
-async def slot(ctx, miktar):
+async def slot(ctx, miktar: str):
 
+    MAX_BET = 100000
     user = get_user(ctx.author.id)
 
-    if str(miktar).lower() == "all":
-        miktar = user["para"]
+    if miktar.lower() == "all":
+        miktar = min(user["para"], MAX_BET)
     else:
-        try:
-            miktar = int(miktar)
-        except:
-            return await ctx.send("❌ Geçerli miktar gir!")
+        if not miktar.isdigit():
+            return await ctx.send("❌ Geçerli miktar gir.")
+        miktar = int(miktar)
 
     if miktar <= 0:
-        return await ctx.send("❌ Geçerli miktar gir!")
+        return await ctx.send("❌ Geçerli miktar gir.")
 
-    if miktar > 100000:
-        return await ctx.send("❌ Slotta maksimum 100.000 oynayabilirsin!")
+    if miktar > MAX_BET:
+        return await ctx.send("❌ Maksimum 100.000 oynayabilirsin.")
 
     if user["para"] < miktar:
         return await ctx.send("❌ Paran yetmiyor.")
@@ -632,29 +632,31 @@ async def slot(ctx, miktar):
     msg = await ctx.send("🎰 Slot dönüyor...")
     await asyncio.sleep(2)
 
-    emojis = ["🍒", "🍋", "🍉", "⭐"]
-    result = [random.choice(emojis) for _ in range(3)]
-
     win_chance = hesapla_win_chance(user)
-    kazanc = 0
+    kazandi = random.random() < win_chance
 
-    if random.random() < win_chance:
-        if random.random() < 0.20:
-            kazanc = miktar * 3
-        else:
-            kazanc = miktar * 2
+    emojis = ["🍒", "🍋", "🍉", "⭐"]
 
-    if kazanc > 0:
+    if kazandi:
+        secilen = random.choice(emojis)
+        result = [secilen, secilen, secilen]
+        kazanc = miktar * 2
+
         collection.update_one(
             {"_id": str(ctx.author.id)},
             {"$inc": {"para": kazanc, "toplam_kazanc": kazanc}}
         )
+
         text = f"🎉 Kazandın! +{formatla(kazanc)}"
     else:
+        result = random.sample(emojis, 3)
+        kazanc = 0
+
         collection.update_one(
             {"_id": str(ctx.author.id)},
             {"$inc": {"toplam_kayip": miktar}}
         )
+
         text = "💀 Kaybettin."
 
     await msg.edit(content=f"{' | '.join(result)}\n{text}")
@@ -812,6 +814,8 @@ q!maaş → Maaşınızı yatırır
         description="""
 q!cf miktar → Yazı tura
 q!balıktut → Balık Oyunu
+q!zar miktar → Zar atmaca
+q!yuksekdusuk miktar yuksek&dusuk → Sayı bilmece 
 q!slot miktar → Slot oyunu
 q!blackjack miktar → Blackjack oyunu
 """,
@@ -1178,13 +1182,14 @@ async def blackjack(ctx, miktar: str = None):
 @commands.cooldown(1, 7, commands.BucketType.user)
 async def zar(ctx, miktar: str):
 
+    MAX_BET = 100000
     user = get_user(ctx.author.id)
 
     if miktar.lower() == "all":
         miktar = min(user["para"], MAX_BET)
     else:
         if not miktar.isdigit():
-            return await ctx.send("❌ Geçerli bir miktar gir.")
+            return await ctx.send("❌ Geçerli miktar gir.")
         miktar = int(miktar)
 
     if miktar <= 0:
@@ -1207,21 +1212,25 @@ async def zar(ctx, miktar: str):
     win_chance = hesapla_win_chance(user)
     kazandi = random.random() < win_chance
 
-    zar_sonuc = random.randint(1, 6)
-
     if kazandi:
+        zar_sonuc = random.choice([4, 5, 6])
         kazanc = miktar * 2
+
         collection.update_one(
             {"_id": str(ctx.author.id)},
             {"$inc": {"para": kazanc, "toplam_kazanc": kazanc}}
         )
+
         mesaj = f"🎲 Zar: {zar_sonuc}\n🎉 Kazandın! +{formatla(kazanc)}"
     else:
+        zar_sonuc = random.choice([1, 2, 3])
+
         collection.update_one(
             {"_id": str(ctx.author.id)},
             {"$inc": {"toplam_kayip": miktar}}
         )
-        mesaj = f"🎲 Zar: {zar_sonuc}\n💀 Kaybettin!"
+
+        mesaj = f"🎲 Zar: {zar_sonuc}\n💀 Kaybettin."
 
     await ctx.send(mesaj)
 
