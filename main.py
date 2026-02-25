@@ -52,6 +52,11 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
+active_duels = {}
+DUEL_COOLDOWN = 300
+TURN_TIMEOUT = 30
+MINN_BET = 5000
+
 # ================= BOT =================
 
 intents = discord.Intents.default()
@@ -127,8 +132,8 @@ def get_user(user_id):
         {"_id": user_id},
         {
             "$setOnInsert": {
-                "para": 1000,
-                "banka": 0,
+                "para": 2500,
+                "banka": 500,
                 "meslek": "İşsiz",
                 "xp": 0,
                 "level": 1,
@@ -177,7 +182,17 @@ def get_user(user_id):
                 },
 
                 # 🏭 İşletmeler
-                "isletmeler": {}
+                "isletmeler": {},
+
+                # ⚔️ PvP Sistemi
+                "pvp": {
+                    "win": 0,
+                    "lose": 0,
+                    "rank_point": 0,
+                    "duel_count": 0,
+                    "afk_penalty_until": 0,
+                    "last_duel_users": {}
+                }
             }
         },
         upsert=True,
@@ -383,8 +398,6 @@ async def rozet_kontrol(user_id):
             except:
                 pass
 
-
-
 def global_toplam_para():
     pipeline = [
         {
@@ -432,6 +445,18 @@ def hesapla_win_chance(user):
         win_chance = 0.60
 
     return win_chance
+
+def get_rank_name(point):
+    if point < 100:
+        return "Bronz"
+    elif point < 300:
+        return "Gümüş"
+    elif point < 600:
+        return "Altın"
+    elif point < 1000:
+        return "Elmas"
+    else:
+        return "Efsane"
 
 def enflasyon_orani():
     toplam = global_toplam_para()
@@ -1006,6 +1031,20 @@ async def hesap(ctx):
     embed.add_field(name="💼 Meslek", value=meslek, inline=False)
     embed.add_field(name="💵 Günlük Maaş", value=formatla(maas), inline=False)
     embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=formatla(faiz), inline=False)
+
+    # ✅ PvP Rank Sistemi (EKLENDİ)
+    pvp = user.get("pvp", {})
+    rank_point = pvp.get("rank_point", 0)
+    win = pvp.get("win", 0)
+    lose = pvp.get("lose", 0)
+
+    embed.add_field(
+        name="⚔️ Düello Rank",
+        value=f"🏆 Rank: {get_rank_name(rank_point)}\n"
+              f"⭐ Puan: {rank_point}\n"
+              f"🥇 Win: {win} | ❌ Lose: {lose}",
+        inline=False
+    )
 
     # Aktif Rozet
     aktif_rozet = user.get("aktif_rozet")
@@ -3742,6 +3781,229 @@ async def rozetler(ctx):
     embed.set_footer(text=f"{len(sahip)} / {len(ROZETLER)} rozet kazanmışsın")
 
     await ctx.send(embed=embed)
+
+def get_rank_name(point):
+    if point >= 2000:
+        return "👑 Efsanevi"
+    elif point >= 1000:
+        return "💎 Elmas"
+    elif point >= 500:
+        return "🥇 Altın"
+    elif point >= 200:
+        return "🥈 Gümüş"
+    else:
+        return "🥉 Bronz"
+
+
+@bot.command()
+@commands.cooldown(1, DUEL_COOLDOWN, commands.BucketType.user)
+async def düello(ctx, member: discord.Member, bahis: int):
+
+    if member.bot or member.id == ctx.author.id:
+        return await ctx.send("❌ Geçersiz hedef.")
+
+    if bahis < MINN_BET:
+        return await ctx.send(f"❌ Minimum bahis {MINN_BET}")
+
+    user1 = get_user(ctx.author.id)
+    user2 = get_user(member.id)
+
+    if user1["para"] < bahis or user2["para"] < bahis:
+        return await ctx.send("❌ Yetersiz bakiye.")
+
+    view = DuelAcceptView(ctx.author, member, bahis)
+
+    embed = discord.Embed(
+        title="⚔️ Düello Teklifi",
+        description=f"{member.mention}, kabul ediyor musun?\nBahis: {bahis}",
+        color=discord.Color.red()
+    )
+
+    await ctx.send(embed=embed, view=view)
+
+
+@bot.command()
+async def rank(ctx):
+    user = get_user(ctx.author.id)
+    pvp = user.get("pvp", {})
+    point = pvp.get("rank_point", 0)
+
+    embed = discord.Embed(title="⚔️ PvP Rank", color=discord.Color.blurple())
+    embed.add_field(name="Rank", value=get_rank_name(point))
+    embed.add_field(name="Puan", value=point)
+    embed.add_field(name="Win", value=pvp.get("win", 0))
+    embed.add_field(name="Lose", value=pvp.get("lose", 0))
+
+    await ctx.send(embed=embed)
+
+class DuelView(discord.ui.View):
+    def __init__(self, duel_id):
+        super().__init__(timeout=None)
+        self.duel_id = duel_id
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        duel = active_duels.get(self.duel_id)
+        if not duel:
+            await interaction.response.send_message("Düello bitmiş.", ephemeral=True)
+            return False
+
+        if interaction.user.id != duel["turn"]:
+            await interaction.response.send_message("Sıra sende değil.", ephemeral=True)
+            return False
+
+        return True
+
+    async def process_turn(self, interaction, action):
+        duel = active_duels[self.duel_id]
+        attacker = duel["turn"]
+        defender = duel["p1"] if attacker == duel["p2"] else duel["p2"]
+
+        attacker_data = get_user(attacker)
+        defender_data = get_user(defender)
+
+        damage = 0
+        heal = 0
+
+        if action == "vur":
+            damage = random.randint(0, 200)
+            if duel.get("defending") == defender:
+                damage = int(damage * 0.5)
+
+            duel["hp"][defender] -= damage
+            text = f"💥 {interaction.user.mention} {damage} hasar vurdu!"
+
+        elif action == "savun":
+            duel["defending"] = attacker
+            text = f"🛡 {interaction.user.mention} savunmaya geçti!"
+
+        elif action == "can":
+            heal = random.randint(20, 200)
+            duel["hp"][attacker] += heal
+            if duel["hp"][attacker] > 1000:
+                duel["hp"][attacker] = 1000
+            text = f"❤️ {interaction.user.mention} {heal} can yeniledi!"
+
+        duel["turn"] = defender
+        duel["defending"] = None
+
+        # Kazanan kontrol
+        if duel["hp"][defender] <= 0:
+            await finish_duel(self.duel_id, attacker, defender, interaction.channel)
+            self.stop()
+            return
+
+        embed = discord.Embed(title="⚔️ Düello Devam Ediyor", color=discord.Color.red())
+        embed.add_field(name="Oyuncu 1 HP", value=f"{duel['hp'][duel['p1']]}")
+        embed.add_field(name="Oyuncu 2 HP", value=f"{duel['hp'][duel['p2']]}")
+        embed.description = text + f"\n\n🎯 Sıra <@{defender}>"
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="VUR", style=discord.ButtonStyle.danger)
+    async def vur(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_turn(interaction, "vur")
+
+    @discord.ui.button(label="SAVUN", style=discord.ButtonStyle.primary)
+    async def savun(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_turn(interaction, "savun")
+
+    @discord.ui.button(label="CAN", style=discord.ButtonStyle.success)
+    async def can(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_turn(interaction, "can")
+
+
+class DuelAcceptView(discord.ui.View):
+    def __init__(self, p1, p2, bet):
+        super().__init__(timeout=60)
+        self.p1 = p1
+        self.p2 = p2
+        self.bet = bet
+
+    @discord.ui.button(label="KABUL ET", style=discord.ButtonStyle.success)
+    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.p2:
+            return await interaction.response.send_message("Bu teklif sana değil.", ephemeral=True)
+
+        duel_id = f"{self.p1.id}-{self.p2.id}"
+        active_duels[duel_id] = {
+            "p1": self.p1.id,
+            "p2": self.p2.id,
+            "hp": {self.p1.id: 1000, self.p2.id: 1000},
+            "turn": self.p1.id,
+            "bet": self.bet,
+            "defending": None
+        }
+
+        collection.update_one({"_id": str(self.p1.id)}, {"$inc": {"para": -self.bet}})
+        collection.update_one({"_id": str(self.p2.id)}, {"$inc": {"para": -self.bet}})
+
+        embed = discord.Embed(title="⚔️ Düello Başladı!", color=discord.Color.dark_red())
+        embed.description = f"{self.p1.mention} vs {self.p2.mention}\n\n🎯 Sıra {self.p1.mention}"
+
+        view = DuelView(duel_id)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="REDDET", style=discord.ButtonStyle.danger)
+    async def reject(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.p2:
+            return
+        await interaction.response.edit_message(content="❌ Düello reddedildi.", embed=None, view=None)
+
+
+async def finish_duel(duel_id, winner, loser, channel):
+    duel = active_duels[duel_id]
+    bet = duel["bet"]
+    total = bet * 2
+
+    winner_data = get_user(winner)
+    boost = 0
+
+    if winner_data["pvp"]["duel_count"] % 5 == 0:
+        boost = int(total * 0.25)
+
+    total += boost
+
+    collection.update_one({"_id": str(winner)}, {
+        "$inc": {
+            "para": total,
+            "pvp.win": 1,
+            "pvp.rank_point": 25,
+            "pvp.duel_count": 1
+        }
+    })
+
+    collection.update_one({"_id": str(loser)}, {
+        "$inc": {
+            "pvp.lose": 1,
+            "pvp.rank_point": -15,
+            "pvp.duel_count": 1
+        }
+    })
+
+    embed = discord.Embed(title="🏆 Düello Bitti!", color=discord.Color.gold())
+    embed.description = f"🎉 <@{winner}> kazandı!\n💰 Ödül: {total}"
+
+    await channel.send(embed=embed)
+
+    del active_duels[duel_id]
+
+@bot.command()
+async def gdüellocular(ctx):
+    users = collection.find().sort("pvp.win", -1).limit(10)
+
+    embed = discord.Embed(title="🌍 Global Düello Liderleri", color=discord.Color.gold())
+
+    i = 1
+    for u in users:
+        embed.add_field(
+            name=f"#{i}",
+            value=f"<@{u['_id']}> - {u.get('pvp', {}).get('win', 0)} Win",
+            inline=False
+        )
+        i += 1
+
+    await ctx.send(embed=embed)
+
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
 
