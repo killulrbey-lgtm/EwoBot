@@ -8,55 +8,31 @@ from pymongo import MongoClient, ReturnDocument
 from flask import Flask
 from threading import Thread
 import pymongo
-from pymongo.errors import PyMongoError
 
 # ================= MONGO =================
-
-import os
-from pymongo import MongoClient
-from pymongo.errors import PyMongoError
 
 MONGO_URI = os.getenv("MONGO_URI")
 
 if not MONGO_URI:
     raise Exception("MONGO_URI bulunamadı!")
 
-try:
-    client = MongoClient(
-        MONGO_URI,
-        serverSelectionTimeoutMS=5000
-    )
+client = MongoClient(MONGO_URI)
 
-    db = client["EwoBotDB"]
+db = client["EwoBotDB"]
 
-    # Collections
-    collection = db["users"]
-    ekonomi_collection = db["ekonomi"]
-    settings_collection = db["settings"]
+collection = db["users"]
+economy_col = db["ekonomi"]  
+ekonomi_collection = db["ekonomi"]
+settings_collection = db["settings"]
+settings_col = db["settings"]
 
-    # 🔥 HATA FIX (eski kod uyumluluğu için)
-    settings_col = settings_collection
-
-    # bağlantıyı test et
-    client.admin.command("ping")
-    print("MongoDB bağlantısı başarılı.")
-
-except Exception as e:
-    print("MongoDB bağlantı hatası:", e)
-    raise e
-
-
-# ================= BAKIM MODU =================
+# fonksyon bakim modu
 
 def bakim_aktif_mi():
-    try:
-        data = settings_collection.find_one({"_id": "bakim_modu"})
-        if not data:
-            return False
-        return data.get("aktif", False)
-    except PyMongoError as e:
-        print("Bakım modu kontrol hatası:", e)
+    data = settings_collection.find_one({"_id": "bakim_modu"})
+    if not data:
         return False
+    return data.get("aktif", False)
 
 # ================= FLASK KEEP ALIVE =================
 from flask import Flask
@@ -102,13 +78,6 @@ bot = commands.Bot(
     intents=intents,
     help_command=None        # 🔥 Default help kapalı
 )
-
-# ================= PREMIUM SABİT =================
-PREMIUM_OWNER_ID = 1271933410251772017
-PREMIUM_LOG_KANAL = 1476126011522285578
-
-def premium_yetkili(ctx):
-    return ctx.author.id == PREMIUM_OWNER_ID
 
 ISLETMELER = {
     "maden": {"fiyat": 300000, "gelir": 6000},
@@ -165,9 +134,8 @@ def get_user(user_id):
                 "level": 1,
                 "son_maas": 0,
                 "son_gunluk": 0,
-                "premium_bitis": 0,  # 👈 PREMIUM SÜRE BİTİŞ ZAMANI
 
-                # :bar_chart: İstatistikler
+                # 📊 İstatistikler
                 "cf_sayisi": 0,
                 "slot_sayisi": 0,
                 "blackjack_sayisi": 0,
@@ -175,16 +143,16 @@ def get_user(user_id):
                 "toplam_kayip": 0,
                 "bosanma_sayisi": 0,
 
-                # :dart: Görev
+                # 🎯 Görev
                 "aktif_gorev": None,
                 "gorev_progress": 0,
                 "tamamlanan_gorev": 0,
 
-                # :medal: Rozet
+                # 🏅 Rozet
                 "rozetler": [],
                 "aktif_rozet": None,
 
-                # :package: Envanter
+                # 📦 Envanter
                 "envanter": {
                     "Bronz Kasa": 0,
                     "Gümüş Kasa": 0,
@@ -198,7 +166,7 @@ def get_user(user_id):
                     "Yüzük": 0
                 },
 
-                # :gem: Yatırımlar
+                # 💎 Yatırımlar
                 "yatirimlar": {
                     "Altın": 0,
                     "Plus": 0,
@@ -208,16 +176,13 @@ def get_user(user_id):
                     "Gümüş": 0
                 },
 
-                # :factory: İşletmeler
+                # 🏭 İşletmeler
                 "isletmeler": {}
             }
         },
         upsert=True,
         return_document=ReturnDocument.AFTER
     )
-
-def is_premium(user):
-    return user.get("premium_bitis", 0) > int(time.time())
 
 async def xp_ekle(user_id, miktar):
 
@@ -228,9 +193,6 @@ async def xp_ekle(user_id, miktar):
 
     xp += miktar
     gereken = level * 500
-
-    if is_premium(user):
-        xp_miktar = int(xp_miktar * 1.25)
 
     while xp >= gereken:
         xp -= gereken
@@ -399,12 +361,6 @@ async def rozet_kontrol(user_id):
     if user.get("toplam_kayip", 0) >= 10000000:
         kazanilanlar.append("10M Kayıp")
 
-    if is_premium(user) and "Premium" not in user.get("rozetler", []):
-        collection.update_one(
-            {"_id": str(user_id)},
-            {"$push": {"rozetler": "Premium"}}
-        )
-
     # 🔥 Yeni rozetleri filtrele
     yeni = [r for r in kazanilanlar if r not in rozetler]
 
@@ -444,13 +400,6 @@ def global_toplam_para():
     if result:
         return result[0]["total_para"] + result[0]["total_banka"]
     return 0 
-
-def is_premium(user):
-    import time
-    return user.get("premium_bitis", 0) > int(time.time())
-
-def premium_yetkili(ctx):
-    return ctx.author.id == PREMIUM_OWNER_ID
 
 def enflasyon_hesapla(taban_fiyat):
     toplam_para = global_toplam_para()
@@ -560,6 +509,7 @@ MAX_BET = 100000
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def cf(ctx, miktar: str):
 
+    MAX_BET = 100000
     user = get_user(ctx.author.id)
 
     if miktar.lower() == "all":
@@ -587,10 +537,6 @@ async def cf(ctx, miktar: str):
     await asyncio.sleep(2)
 
     win_chance = hesapla_win_chance(user)
-    
-    if is_premium(user):
-        win_chance += 0.10
-                               
     kazandi = random.random() < win_chance
 
     if kazandi:
@@ -691,10 +637,6 @@ async def slot(ctx, miktar: str):
     await asyncio.sleep(2)
 
     win_chance = hesapla_win_chance(user)
-    
-    if is_premium(user):
-        win_chance += 0.10
-                               
     kazandi = random.random() < win_chance
 
     emojis = ["🍒", "🍋", "🍉", "⭐"]
@@ -768,10 +710,6 @@ async def gunluk(ctx):
     temel = 1000
     bonus = level * 250
     odul = temel + bonus
-    
-
-    if is_premium(user):
-        odul *= 2
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
@@ -1050,29 +988,15 @@ async def meslek_al(ctx, *, secim):
 
 @bot.command()
 async def hesap(ctx):
-    import random
     user = get_user(ctx.author.id)
-
-    premium = is_premium(user)
 
     meslek = user.get("meslek", "Yok")
     maas = meslekler.get(meslek, {}).get("maas", 0)
-
-    faiz_oran = 0.10 if premium else 0.05
-    faiz = int(user.get("banka", 0) * faiz_oran)
-
-    premium_renkler = [
-        discord.Color.pink(),
-        discord.Color.orange(),
-        discord.Color.gold(),
-        discord.Color.magenta()
-    ]
-
-    embed_color = random.choice(premium_renkler) if premium else discord.Color.blue()
+    faiz = int(user.get("banka", 0) * 0.05)
 
     embed = discord.Embed(
         title="👤 Hesap Bilgilerin",
-        color=embed_color
+        color=discord.Color.blue()
     )
 
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
@@ -1081,28 +1005,12 @@ async def hesap(ctx):
     embed.add_field(name="🏦 Banka", value=formatla(user.get("banka", 0)), inline=False)
     embed.add_field(name="💼 Meslek", value=meslek, inline=False)
     embed.add_field(name="💵 Günlük Maaş", value=formatla(maas), inline=False)
-
-    embed.add_field(
-        name=f"📈 Günlük Banka Faizi (%{int(faiz_oran*100)})",
-        value=formatla(faiz),
-        inline=False
-    )
-
-    # 👑 PREMIUM BLOĞU
-    if premium:
-        kalan = user.get("premium_bitis", 0) - int(time.time())
-        gun = kalan // 86400
-
-        embed.add_field(
-            name="👑 Premium Üye",
-            value=f"Aktif ✅\nKalan Süre: {gun} gün",
-            inline=False
-        )
+    embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=formatla(faiz), inline=False)
 
     # Aktif Rozet
     aktif_rozet = user.get("aktif_rozet")
     if aktif_rozet:
-        embed.add_field(name="🏅 Aktif Rozet", value=aktif_rozet, inline=False)
+        embed.add_field(name="👑 Aktif Rozet", value=aktif_rozet, inline=False)
 
     # Eş
     es_id = user.get("married_to")
@@ -1228,11 +1136,6 @@ async def blackjack(ctx, miktar: str = None):
     bot_toplam = toplam(bot_kart)
 
     win_chance = hesapla_win_chance(user)
-    
-    if is_premium(user):
-        win_chance += 0.10
-                               
-    kazandi = random.random() < win_chance
 
     bot_limit = 17
     if win_chance <= 0.40:
@@ -1311,10 +1214,6 @@ async def zar(ctx, miktar: str):
     await asyncio.sleep(2)
 
     win_chance = hesapla_win_chance(user)
-    
-    if is_premium(user):
-        win_chance += 0.10
-                               
     kazandi = random.random() < win_chance
 
     if kazandi:
@@ -1383,10 +1282,6 @@ async def yuksekdusuk(ctx, miktar: str, secim: str):
     sayi = random.randint(1, 100)
 
     win_chance = hesapla_win_chance(user)
-    
-    if is_premium(user):
-        win_chance += 0.10
-                               
     kazandi = random.random() < win_chance
 
     if kazandi:
@@ -2380,44 +2275,20 @@ async def on_message_delete(message):
 # Mesaj düzenleme
 @bot.event
 async def on_message_edit(before, after):
-
-    if not after.guild:
-        return
-
-    if after.guild.id != DESTEK_SUNUCU_ID:
-        return
-
-    if before.content == after.content:
-        return
-
-    kanal = bot.get_channel(LOG_KANAL_ID)
-    if not kanal:
-        return
-
-    eski = before.content if before.content else "Görsel / Embed"
-    yeni = after.content if after.content else "Görsel / Embed"
-
-    if len(eski) > 1000:
-        eski = eski[:1000] + "..."
-
-    if len(yeni) > 1000:
-        yeni = yeni[:1000] + "..."
-
-    embed = discord.Embed(
-        title="✏️ Mesaj Düzenlendi",
-        description=f"{after.author.mention} mesajını düzenledi.",
-        color=discord.Color.orange()
-    )
-
-    embed.set_thumbnail(url=after.author.display_avatar.url)
-
-    embed.add_field(name="Kanal", value=after.channel.mention, inline=False)
-    embed.add_field(name="Eski Mesaj", value=eski, inline=False)
-    embed.add_field(name="Yeni Mesaj", value=yeni, inline=False)
-
-    embed.set_footer(text=f"Mesaj ID: {after.id}")
-
-    await kanal.send(embed=embed)
+    if after.guild and after.guild.id == DESTEK_SUNUCU_ID and before.content != after.content:
+        kanal = bot.get_channel(LOG_KANAL_ID)
+        if kanal:
+            embed = discord.Embed(
+                title="✏️ Mesaj Düzenlendi",
+                description=f"{after.author.mention} mesajını düzenledi.",
+                color=discord.Color.orange()
+            )
+            embed.set_thumbnail(url=after.author.avatar.url if after.author.avatar else None)
+            embed.add_field(name="Kanal", value=after.channel.mention)
+            embed.add_field(name="Eski Mesaj", value=before.content or "Görsel / Embed")
+            embed.add_field(name="Yeni Mesaj", value=after.content or "Görsel / Embed")
+            embed.set_footer(text=f"ID: {after.id}")
+            await kanal.send(embed=embed)
 
 # Rol ekleme / çıkarma
 @bot.event
@@ -3594,9 +3465,6 @@ async def işletmeparaçek(ctx):
     if toplam <= 0:
         return await ctx.send("❌ İşletmen yok.")
 
-    if is_premium(user):
-        gelir = int(gelir * 1.20)
-
     sigorta = user.get("sigorta_bitis", 0) > simdi
     sans = random.randint(1, 100)
 
@@ -3874,132 +3742,6 @@ async def rozetler(ctx):
     embed.set_footer(text=f"{len(sahip)} / {len(ROZETLER)} rozet kazanmışsın")
 
     await ctx.send(embed=embed)
-# ___________________________ PREMİUM SİSTEMİ________________________
-PREMIUM_OWNER_ID = 1271933410251772017
-
-@bot.command()
-async def premiumver(ctx, uye: discord.Member, gun: int):
-
-    if ctx.author.id != PREMIUM_OWNER_ID:
-        return await ctx.send("❌ Bu komutu sadece Premium Yetkilisi kullanabilir.")
-
-    import time
-
-    simdi = int(time.time())
-    premium_sure = 86400 * gun
-
-    if gun >= 30:
-        coin_bonus = 3000000
-    elif gun >= 7:
-        coin_bonus = 500000
-    else:
-        return await ctx.send("❌ Sadece 7 veya 30 günlük verebilirsin.")
-
-    collection.update_one(
-        {"_id": str(uye.id)},
-        {
-            "$set": {"premium_bitis": simdi + premium_sure},
-            "$inc": {"para": coin_bonus}
-        }
-    )
-
-    await ctx.send(
-        f"👑 {uye.mention} kullanıcısına {gun} günlük Premium verildi!\n"
-        f"💰 Bonus: {formatla(coin_bonus)} EwoCoin"
-    )
-
-
-@bot.command()
-async def premiumsil(ctx, uye: discord.Member):
-
-    if ctx.author.id != PREMIUM_OWNER_ID:
-        return await ctx.send("❌ Bu komutu sadece Premium Yetkilisi kullanabilir.")
-
-    collection.update_one(
-        {"_id": str(uye.id)},
-        {"$set": {"premium_bitis": 0}}
-    )
-
-    await ctx.send(f"❌ {uye.mention} Premium'u kaldırıldı.")
-
-@bot.command()
-async def premver(ctx, member: discord.Member, gun: int):
-    if not premium_yetkili(ctx):
-        return await ctx.send("Bu komutu kullanamazsın.")
-
-    if gun not in [7, 30]:
-        return await ctx.send("Sadece 7 veya 30 gün verebilirsin.")
-
-    user = get_user(member.id)
-
-    simdi = int(time.time())
-    mevcut_bitis = user.get("premium_bitis", 0)
-
-    # Eğer zaten premium varsa üstüne ekle
-    baslangic = mevcut_bitis if mevcut_bitis > simdi else simdi
-    yeni_bitis = baslangic + (gun * 86400)
-
-    collection.update_one(
-        {"_id": str(member.id)},
-        {"$set": {"premium_bitis": yeni_bitis}}
-    )
-
-    # 🎁 BONUS PARA
-    bonus = 3000000 if gun == 30 else 500000
-
-    collection.update_one(
-        {"_id": str(member.id)},
-        {"$inc": {"para": bonus}}
-    )
-
-    embed = discord.Embed(
-        title="💎 Premium Verildi",
-        description=f"{member.mention} kullanıcısına {gun} günlük premium verildi.",
-        color=discord.Color.purple()
-    )
-    embed.add_field(name="Bonus Para", value=f"{bonus:,} EwoCoin")
-
-    await ctx.send(embed=embed)
-
-    # LOG
-    log = bot.get_channel(PREMIUM_LOG_KANAL)
-    if log:
-        await log.send(f"👑 {ctx.author} → {member} ({gun} gün premium)")
-
-@bot.command()
-async def premium(ctx):
-    embed = discord.Embed(
-        title="💎 Premium Satın Alma",
-        description="Premium almak için aşağıdaki IBAN'a ödeme yapınız.",
-        color=discord.Color.gold()
-    )
-
-    embed.add_field(name="💰 7 Gün", value="500K EwoCoin karşılığı", inline=False)
-    embed.add_field(name="💰 30 Gün", value="3M EwoCoin karşılığı", inline=False)
-
-    embed.add_field(
-        name="📌 Açıklama",
-        value="Ödeme açıklamasına Discord kullanıcı adınızı yazınız.",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🏦 IBAN",
-        value="TR00 0000 0000 0000 0000 0000 00",
-        inline=False
-    )
-
-    await ctx.send(embed=embed)
-
-@bot.event
-async def on_message(message):
-
-    if message.author.bot:
-        return
-
-    # başka kontrollerin varsa burada
-
-    await bot.process_commands(message)
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
 
@@ -4062,7 +3804,6 @@ async def on_interaction(interaction: discord.Interaction):
         if interaction.data["custom_id"].startswith("ticket_cevap_"):
             user_id = int(interaction.data["custom_id"].split("_")[-1])
             await interaction.response.send_modal(TicketCevapModal(user_id))
-
 
 if __name__ == "__main__":
     import os
