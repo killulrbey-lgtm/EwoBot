@@ -893,6 +893,10 @@ q!sigorta → 24 saatlik sigorta al
         description="""
 q!gzenginler → Global en zenginler
 q!szenginler → Sunucudaki en zenginler
+q!düello @kullanıcı <bahis> → Başka kullanıcılarla düello yaparsınız
+q!rank → Düello rankınızı gösterir
+q!gdüellocular → En fazla WİN'e sahip 10 kişiyi sıralar
+q!sdüellocular → Sunucuda En fazla WİN'e sahip 10 kişiyi sıralar
 q!soygun → Başka kullanıcıyı soygun yap
 q!enflasyon → Toplam EwoCoin miktarı
 q!kasaaç <Kasaadi> → Kasa açar
@@ -4106,15 +4110,16 @@ async def sdüellocular(ctx):
     text = ""
     sıra = 1
 
-    async for user in top:
+    for user in top:   # async for değil NORMAL for
         win = user.get("pvp", {}).get("win", 0)
         if win <= 0:
             continue
 
-        try:
-            member = await ctx.guild.fetch_member(int(user["_id"]))
+        member = ctx.guild.get_member(int(user["_id"]))
+
+        if member:
             isim = member.display_name
-        except:
+        else:
             isim = f"ID: {user['_id']}"
 
         text += f"**{sıra}.** {isim} — {win} win\n"
@@ -4129,7 +4134,9 @@ async def sdüellocular(ctx):
         color=discord.Color.gold()
     )
 
-    embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
+    if ctx.guild.icon:
+        embed.set_thumbnail(url=ctx.guild.icon.url)
+
     embed.set_footer(text="EwoBot PvP Sistemi")
 
     await ctx.send(embed=embed)
