@@ -1603,58 +1603,71 @@ async def gzenginler(ctx):
 # =====================================================
 
 GLOBAL_ZENGINLER_KANAL_ID = 1474500301758267565
+global_zenginler_mesaj_id = None
 
-@tasks.loop(minutes=10)
+
+@tasks.loop(hours=1)
 async def otomatik_gzenginler():
+    global global_zenginler_mesaj_id
 
-    kanal = bot.get_channel(GLOBAL_ZENGINLER_KANAL_ID)
-
-    if not kanal:
-        print("Global zenginler kanalı bulunamadı.")
-        return
-
-    tum_kullanicilar = collection.find()
-
-    liste = []
-
-    for user in tum_kullanicilar:
-        para = user.get("para", 0)
-        banka = user.get("banka", 0)
-        toplam_servet = para + banka
-
-        if toplam_servet > 0:
-            liste.append((user["_id"], toplam_servet))
-
-    # Büyükten küçüğe sırala
-    sirali = sorted(liste, key=lambda x: x[1], reverse=True)[:10]
-
-    embed = discord.Embed(
-        title="🌍 Global En Zenginler Listesi",
-        color=discord.Color.gold()
-    )
-
-    if not sirali:
-        embed.description = "Henüz veri yok."
-    else:
-        for i, (user_id, servet) in enumerate(sirali, 1):
-            try:
-                uye = await bot.fetch_user(int(user_id))
-                embed.add_field(
-                    name=f"{i}. {uye.name}",
-                    value=f"💰 Serveti = {formatla(servet)} EwoCoin",
-                    inline=False
-                )
-            except:
-                continue
-
-    # Eski mesajı bulup güncelle
-    async for msg in kanal.history(limit=10):
-        if msg.author == bot.user:
-            await msg.edit(embed=embed)
+    try:
+        kanal = bot.get_channel(GLOBAL_ZENGINLER_KANAL_ID)
+        if not kanal:
+            print("Global zenginler kanalı bulunamadı.")
             return
 
-    # Eğer mesaj yoksa yeni at
-    await kanal.send(embed=embed)
+        tum_kullanicilar = collection.find()
+        liste = []
+
+        for user in tum_kullanicilar:
+            para = user.get("para", 0)
+            banka = user.get("banka", 0)
+            toplam_servet = para + banka
+
+            if toplam_servet > 0:
+                liste.append((user["_id"], toplam_servet))
+
+        sirali = sorted(liste, key=lambda x: x[1], reverse=True)[:10]
+
+        embed = discord.Embed(
+            title="🌍 Global En Zenginler",
+            color=discord.Color.gold()
+        )
+
+        if not sirali:
+            embed.description = "Henüz veri yok."
+        else:
+            for i, (user_id, servet) in enumerate(sirali, 1):
+                uye = bot.get_user(int(user_id))  # FETCH YOK!
+                if not uye:
+                    continue
+
+                embed.add_field(
+                    name=f"{i}. {uye.name}",
+                    value=f"💰 {formatla(servet)} EwoCoin",
+                    inline=False
+                )
+
+        # Mesaj varsa edit
+        if global_zenginler_mesaj_id:
+            try:
+                mesaj = await kanal.fetch_message(global_zenginler_mesaj_id)
+                await mesaj.edit(embed=embed)
+                return
+            except:
+                global_zenginler_mesaj_id = None
+
+        # Yoksa yeni oluştur
+        mesaj = await kanal.send(embed=embed)
+        global_zenginler_mesaj_id = mesaj.id
+
+    except Exception as e:
+        print("Global zenginler hata:", e)
+
+
+@otomatik_gzenginler.before_loop
+async def before_global():
+    await bot.wait_until_ready()
 
 @bot.command()
 async def szenginler(ctx):
@@ -1696,20 +1709,64 @@ async def enflasyon(ctx):
 
     await ctx.send(embed=embed)
 
-@tasks.loop(minutes=10)
+# =====================================================
+# 📈 ENFLASYON OTOMATİK (SAFE VERSION)
+# =====================================================
+
+ENFLASYON_KANAL_ID = 1474499745257881762
+enflasyon_mesaj_id = None
+
+
+@tasks.loop(hours=1)
 async def enflasyon_gonder():
+    global enflasyon_mesaj_id
 
-    kanal = await bot.fetch_channel(1474499745257881762)
+    try:
+        kanal = bot.get_channel(ENFLASYON_KANAL_ID)
+        if not kanal:
+            print("Enflasyon kanalı bulunamadı.")
+            return
 
-    toplam = global_toplam_para()
+        toplam = global_toplam_para()
+        oran = enflasyon_orani()
 
-    embed = discord.Embed(
-        title="📈 Güncel Enflasyon",
-        description=f"Toplam Dolaşımdaki EwoCoin:\n\n💸 **{toplam:,}**",
-        color=discord.Color.red()
-    )
+        embed = discord.Embed(
+            title="📈 Güncel Enflasyon",
+            color=discord.Color.orange()
+        )
 
-    await kanal.send(embed=embed)
+        embed.add_field(
+            name="Toplam Dolaşımdaki Para",
+            value=f"💸 {formatla(toplam)} EwoCoin",
+            inline=False
+        )
+
+        embed.add_field(
+            name="Enflasyon Oranı",
+            value=f"{round(oran,2)}x",
+            inline=False
+        )
+
+        # Mesaj varsa edit
+        if enflasyon_mesaj_id:
+            try:
+                mesaj = await kanal.fetch_message(enflasyon_mesaj_id)
+                await mesaj.edit(embed=embed)
+                return
+            except:
+                enflasyon_mesaj_id = None
+
+        # Yoksa yeni oluştur
+        mesaj = await kanal.send(embed=embed)
+        enflasyon_mesaj_id = mesaj.id
+
+    except Exception as e:
+        print("Enflasyon hata:", e)
+
+
+@enflasyon_gonder.before_loop
+async def before_enflasyon():
+    await bot.wait_until_ready()
 
 # ------------------- q!soygun -------------------
 @bot.command()
