@@ -3941,7 +3941,7 @@ class DuelAcceptView(discord.ui.View):
             "turn": self.p1.id,
             "bet": self.bet,
             "defending": None,
-            "last_action": time.time()
+            "last_action": time.time(),
             "channel_id": interaction.channel.id
         }
 
