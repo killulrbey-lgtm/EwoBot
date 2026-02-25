@@ -12,6 +12,10 @@ from pymongo.errors import PyMongoError
 
 # ================= MONGO =================
 
+import os
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
+
 MONGO_URI = os.getenv("MONGO_URI")
 
 if not MONGO_URI:
@@ -20,14 +24,18 @@ if not MONGO_URI:
 try:
     client = MongoClient(
         MONGO_URI,
-        serverSelectionTimeoutMS=5000  # 5 saniye timeout
+        serverSelectionTimeoutMS=5000
     )
 
     db = client["EwoBotDB"]
 
+    # Collections
     collection = db["users"]
     ekonomi_collection = db["ekonomi"]
     settings_collection = db["settings"]
+
+    # 🔥 HATA FIX (eski kod uyumluluğu için)
+    settings_col = settings_collection
 
     # bağlantıyı test et
     client.admin.command("ping")
@@ -36,6 +44,7 @@ try:
 except Exception as e:
     print("MongoDB bağlantı hatası:", e)
     raise e
+
 
 # ================= BAKIM MODU =================
 
