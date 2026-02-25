@@ -65,6 +65,10 @@ intents.members = True
 intents.message_content = True
 intents.invites = True  # ÖNEMLİ
 
+active_duels = {}
+duel_history = defaultdict(list)  # anti boost için
+DUEL_TIMEOUT = 120  # 2 dakika hamle süresi
+
 def get_prefix(bot, message):
     prefixes = [
         "q!",
@@ -3821,7 +3825,6 @@ async def düello(ctx, member: discord.Member, bahis: int):
 
     await ctx.send(embed=embed, view=view)
 
-
 @bot.command()
 async def rank(ctx):
     user = get_user(ctx.author.id)
@@ -3854,48 +3857,52 @@ class DuelView(discord.ui.View):
         return True
 
     async def process_turn(self, interaction, action):
+
         duel = active_duels[self.duel_id]
+
         attacker = duel["turn"]
         defender = duel["p1"] if attacker == duel["p2"] else duel["p2"]
-
-        attacker_data = get_user(attacker)
-        defender_data = get_user(defender)
 
         damage = 0
         heal = 0
 
         if action == "vur":
-            damage = random.randint(0, 200)
-            if duel.get("defending") == defender:
+            damage = random.randint(50, 200)
+
+            if duel["defending"] == defender:
                 damage = int(damage * 0.5)
 
             duel["hp"][defender] -= damage
-            text = f"💥 {interaction.user.mention} {damage} hasar vurdu!"
+            text = f"💥 {interaction.user.display_name} {damage} hasar vurdu!"
 
         elif action == "savun":
             duel["defending"] = attacker
-            text = f"🛡 {interaction.user.mention} savunmaya geçti!"
+            text = f"🛡 {interaction.user.display_name} savunmaya geçti!"
 
         elif action == "can":
-            heal = random.randint(20, 200)
+            heal = random.randint(50, 150)
             duel["hp"][attacker] += heal
-            if duel["hp"][attacker] > 1000:
-                duel["hp"][attacker] = 1000
-            text = f"❤️ {interaction.user.mention} {heal} can yeniledi!"
+            duel["hp"][attacker] = min(duel["hp"][attacker], 1000)
+            text = f"❤️ {interaction.user.display_name} {heal} can yeniledi!"
 
         duel["turn"] = defender
-        duel["defending"] = None
+        duel["last_action"] = time.time()
 
-        # Kazanan kontrol
+        # Kazanma kontrol
         if duel["hp"][defender] <= 0:
             await finish_duel(self.duel_id, attacker, defender, interaction.channel)
             self.stop()
             return
 
+        attacker_member = interaction.guild.get_member(attacker)
+        defender_member = interaction.guild.get_member(defender)
+
         embed = discord.Embed(title="⚔️ Düello Devam Ediyor", color=discord.Color.red())
-        embed.add_field(name="Oyuncu 1 HP", value=f"{duel['hp'][duel['p1']]}")
-        embed.add_field(name="Oyuncu 2 HP", value=f"{duel['hp'][duel['p2']]}")
-        embed.description = text + f"\n\n🎯 Sıra <@{defender}>"
+        embed.description = (
+            f"{attacker_member.display_name} ❤️ {duel['hp'][attacker]}\n"
+            f"{defender_member.display_name} ❤️ {duel['hp'][defender]}\n\n"
+            f"{text}\n\n🎯 Sıra: {defender_member.display_name}"
+        )
 
         await interaction.response.edit_message(embed=embed, view=self)
 
@@ -3921,24 +3928,28 @@ class DuelAcceptView(discord.ui.View):
 
     @discord.ui.button(label="KABUL ET", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+
         if interaction.user != self.p2:
             return await interaction.response.send_message("Bu teklif sana değil.", ephemeral=True)
 
         duel_id = f"{self.p1.id}-{self.p2.id}"
+
         active_duels[duel_id] = {
             "p1": self.p1.id,
             "p2": self.p2.id,
             "hp": {self.p1.id: 1000, self.p2.id: 1000},
             "turn": self.p1.id,
             "bet": self.bet,
-            "defending": None
+            "defending": None,
+            "last_action": time.time()
+            "channel_id": interaction.channel.id
         }
 
         collection.update_one({"_id": str(self.p1.id)}, {"$inc": {"para": -self.bet}})
         collection.update_one({"_id": str(self.p2.id)}, {"$inc": {"para": -self.bet}})
 
         embed = discord.Embed(title="⚔️ Düello Başladı!", color=discord.Color.dark_red())
-        embed.description = f"{self.p1.mention} vs {self.p2.mention}\n\n🎯 Sıra {self.p1.mention}"
+        embed.description = f"{self.p1.display_name} vs {self.p2.display_name}\n\n🎯 Sıra: {self.p1.display_name}"
 
         view = DuelView(duel_id)
         await interaction.response.edit_message(embed=embed, view=view)
@@ -3949,39 +3960,58 @@ class DuelAcceptView(discord.ui.View):
             return
         await interaction.response.edit_message(content="❌ Düello reddedildi.", embed=None, view=None)
 
+async def on_timeout(self):
+    for item in self.children:
+        item.disabled = True
 
 async def finish_duel(duel_id, winner, loser, channel):
+
     duel = active_duels[duel_id]
     bet = duel["bet"]
+
+    # Anti boost kontrol (aynı kişiyle son 5 düello)
+    history = duel_history[winner]
+    if loser in history[-5:]:
+        anti_boost = True
+    else:
+        anti_boost = False
+
     total = bet * 2
 
     winner_data = get_user(winner)
-    boost = 0
+    duel_count = winner_data.get("pvp", {}).get("duel_count", 0)
 
-    if winner_data["pvp"]["duel_count"] % 5 == 0:
+    boost = 0
+    if duel_count % 5 == 4:
         boost = int(total * 0.25)
 
     total += boost
 
-    collection.update_one({"_id": str(winner)}, {
-        "$inc": {
-            "para": total,
-            "pvp.win": 1,
-            "pvp.rank_point": 25,
-            "pvp.duel_count": 1
-        }
-    })
+    if not anti_boost:
+        collection.update_one({"_id": str(winner)}, {
+            "$inc": {
+                "para": total,
+                "pvp.win": 1,
+                "pvp.rank_point": 25,
+                "pvp.duel_count": 1
+            }
+        })
 
-    collection.update_one({"_id": str(loser)}, {
-        "$inc": {
-            "pvp.lose": 1,
-            "pvp.rank_point": -15,
-            "pvp.duel_count": 1
-        }
-    })
+        collection.update_one({"_id": str(loser)}, {
+            "$inc": {
+                "pvp.lose": 1,
+                "pvp.rank_point": -15,
+                "pvp.duel_count": 1
+            }
+        })
+
+    duel_history[winner].append(loser)
 
     embed = discord.Embed(title="🏆 Düello Bitti!", color=discord.Color.gold())
-    embed.description = f"🎉 <@{winner}> kazandı!\n💰 Ödül: {total}"
+    embed.description = f"<@{winner}> kazandı!\n💰 Ödül: {total}"
+
+    if anti_boost:
+        embed.add_field(name="⚠ Anti Boost", value="Rank puanı verilmedi.")
 
     await channel.send(embed=embed)
 
@@ -3989,20 +4019,120 @@ async def finish_duel(duel_id, winner, loser, channel):
 
 @bot.command()
 async def gdüellocular(ctx):
-    users = collection.find().sort("pvp.win", -1).limit(10)
 
-    embed = discord.Embed(title="🌍 Global Düello Liderleri", color=discord.Color.gold())
+    top = collection.find().sort("pvp.win", -1).limit(10)
 
-    i = 1
-    for u in users:
-        embed.add_field(
-            name=f"#{i}",
-            value=f"<@{u['_id']}> - {u.get('pvp', {}).get('win', 0)} Win",
-            inline=False
-        )
-        i += 1
+    text = ""
+    sıra = 1
+
+    for user in top:
+        win = user.get("pvp", {}).get("win", 0)
+        if win <= 0:
+            continue
+
+        try:
+            u = await bot.fetch_user(int(user["_id"]))
+            isim = u.name
+        except:
+            isim = f"ID: {user['_id']}"
+
+        text += f"**{sıra}.** {isim} — {win} win\n"
+        sıra += 1
+
+    if text == "":
+        text = "Henüz global düello verisi yok."
+
+    embed = discord.Embed(
+        title="🌍 Global Düellocular",
+        description=text,
+        color=discord.Color.purple()
+    )
 
     await ctx.send(embed=embed)
+
+@tasks.loop(hours=1)
+async def otomatik_gduellocular():
+
+    channel = bot.get_channel(1476245925382066312)
+    if not channel:
+        return
+
+    top = collection.find().sort("pvp.win", -1).limit(10)
+
+    text = ""
+    sıra = 1
+
+    for user in top:
+        win = user.get("pvp", {}).get("win", 0)
+        if win <= 0:
+            continue
+
+        try:
+            u = await bot.fetch_user(int(user["_id"]))
+            isim = u.name
+        except:
+            isim = f"ID: {user['_id']}"
+
+        text += f"**{sıra}.** {isim} — {win} win\n"
+        sıra += 1
+
+    if text == "":
+        text = "Henüz global düello verisi yok."
+
+    embed = discord.Embed(
+        title="🌍 Global Düellocular",
+        description=text,
+        color=discord.Color.gold()
+    )
+
+    # Var olan mesajı bul ve güncelle
+    async for msg in channel.history(limit=20):
+        if msg.author == bot.user and msg.embeds:
+            await msg.edit(embed=embed)
+            return
+
+    await channel.send(embed=embed)
+
+@bot.command()
+async def sdüellocular(ctx):
+
+    guild_member_ids = [str(member.id) for member in ctx.guild.members]
+
+    top = collection.find(
+        {"_id": {"$in": guild_member_ids}}
+    ).sort("pvp.win", -1).limit(10)
+
+    text = ""
+    sıra = 1
+
+    async for user in top:
+        win = user.get("pvp", {}).get("win", 0)
+        if win <= 0:
+            continue
+
+        try:
+            member = await ctx.guild.fetch_member(int(user["_id"]))
+            isim = member.display_name
+        except:
+            isim = f"ID: {user['_id']}"
+
+        text += f"**{sıra}.** {isim} — {win} win\n"
+        sıra += 1
+
+    if text == "":
+        text = "Bu sunucuda henüz düello kazanan yok."
+
+    embed = discord.Embed(
+        title=f"⚔️ {ctx.guild.name} Düello Sıralaması",
+        description=text,
+        color=discord.Color.gold()
+    )
+
+    embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
+    embed.set_footer(text="EwoBot PvP Sistemi")
+
+    await ctx.send(embed=embed)
+
 
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
@@ -4022,6 +4152,8 @@ async def on_ready():
     print(f"{bot.user} aktif!")
     print(f"Sunucu sayısı: {len(bot.guilds)}")
     print("===================================")
+
+    duel_timeout_checker.start()
 
     # Invite cache doldur
     for guild in bot.guilds:
@@ -4058,6 +4190,20 @@ async def on_ready():
             enflasyon_gonder.start()
     except Exception as e:
         print("Enflasyon loop hatası:", e)
+
+@tasks.loop(seconds=10)
+async def duel_timeout_checker():
+    now = time.time()
+
+    for duel_id, duel in list(active_duels.items()):
+        if now - duel["last_action"] > DUEL_TIMEOUT:
+
+            loser = duel["turn"]
+            winner = duel["p1"] if loser == duel["p2"] else duel["p2"]
+
+            channel = bot.get_channel(duel["channel_id"])
+            if channel:
+                await finish_duel(duel_id, winner, loser, channel)
 
 
 @bot.event
