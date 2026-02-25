@@ -8,6 +8,7 @@ from pymongo import MongoClient, ReturnDocument
 from flask import Flask
 from threading import Thread
 import pymongo
+from collections import defaultdict
 
 # ================= MONGO =================
 
