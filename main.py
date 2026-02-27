@@ -71,16 +71,18 @@ duel_history = defaultdict(list)  # anti boost için
 DUEL_TIMEOUT = 120  # 2 dakika hamle süresi
 
 def get_prefix(bot, message):
-    prefixes = [
-        "q!",
-        "Q!",
-        "q",
-        "Q",
-        "ewo ",
-        "Ewo ",
-        "!"
-    ]
-    return commands.when_mentioned_or(*prefixes)(bot, message)
+
+    default_prefixes = ["q!", "Q!", "q", "Q", "ewo ", "Ewo ", "!"]
+
+    if not message.guild:
+        return commands.when_mentioned_or(*default_prefixes)(bot, message)
+
+    data = settings_collection.find_one({"_id": f"guild_{message.guild.id}"})
+
+    if data and "prefix" in data:
+        return commands.when_mentioned_or(data["prefix"])(bot, message)
+
+    return commands.when_mentioned_or(*default_prefixes)(bot, message)
 
 bot = commands.Bot(
     command_prefix=get_prefix,
@@ -97,7 +99,7 @@ ISLETMELER = {
     "bankasubesi": {"fiyat": 3500000, "gelir": 75000},
     "liman": {"fiyat": 5000000, "gelir": 110000},
     "sirket": {"fiyat": 8000000, "gelir": 180000},
-    "holding": {"fiyat": 12000000, "gelir": 300000}
+    "holding": {"fiyat": 14000000, "gelir": 280000}
 }
 
 invite_cache = {}
@@ -402,6 +404,13 @@ async def rozet_kontrol(user_id):
                 await user_obj.send(embed=embed)
             except:
                 pass
+
+async def kanal_kilitli_mi(guild_id, channel_id):
+    data = settings_collection.find_one({"_id": f"guild_{guild_id}"})
+    if not data:
+        return False
+
+    return channel_id in data.get("disabled_channels", [])
 
 def global_toplam_para():
     pipeline = [
@@ -914,7 +923,19 @@ q!davet → Botu sunucuna ekle
         color=discord.Color.blurple()
     )
 
-    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, diger_embed]:
+    # 🔥 YENİ EKLENEN EMBED
+    yetkili_embed = discord.Embed(
+        title="🛠️ Yetkili Komutları",
+        description="""
+q!komutkapat → Bulunduğun kanalda bot komutlarını kapatır
+q!komutaç → Bulunduğun kanalda bot komutlarını açar
+q!prefix <yeni> → Sunucu prefixini değiştirir
+q!prefixsifirla → Prefixi varsayılana döndürür
+""",
+        color=discord.Color.orange()
+    )
+
+    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, diger_embed, yetkili_embed]:
         e.set_footer(text="EwoBot Yardım Menüsü")
 
     view = View(timeout=None)
@@ -925,6 +946,7 @@ q!davet → Botu sunucuna ekle
     meslek_button = Button(label="💼 Meslek", style=discord.ButtonStyle.gray)
     isletme_button = Button(label="🏭 İşletmeler", style=discord.ButtonStyle.green)
     diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
+    yetkili_button = Button(label="🛠️ Yetkili", style=discord.ButtonStyle.danger)
 
     async def ekonomi_callback(interaction):
         await interaction.response.edit_message(embed=ekonomi_embed, view=view)
@@ -944,12 +966,16 @@ q!davet → Botu sunucuna ekle
     async def diger_callback(interaction):
         await interaction.response.edit_message(embed=diger_embed, view=view)
 
+    async def yetkili_callback(interaction):
+        await interaction.response.edit_message(embed=yetkili_embed, view=view)
+
     ekonomi_button.callback = ekonomi_callback
     kumar_button.callback = kumar_callback
     banka_button.callback = banka_callback
     meslek_button.callback = meslek_callback
     isletme_button.callback = isletme_callback
     diger_button.callback = diger_callback
+    yetkili_button.callback = yetkili_callback
 
     view.add_item(ekonomi_button)
     view.add_item(kumar_button)
@@ -957,21 +983,36 @@ q!davet → Botu sunucuna ekle
     view.add_item(meslek_button)
     view.add_item(isletme_button)
     view.add_item(diger_button)
+    view.add_item(yetkili_button)
 
     await ctx.send(embed=ekonomi_embed, view=view)
 
 # Meslek ve fiyatları tanımla
-meslekler = {
+mmeslekler = {
+
+    "Kripto Milyarderi": {"fiyat": 10_500_000, "maas": 185_000},
+    "Dünya Lideri": {"fiyat": 7_500_000, "maas": 110_000},
+    "Küresel Finans İmparatoru": {"fiyat": 5_000_000, "maas": 95_000},
+    "Holding CEO": {"fiyat": 2_500_000, "maas": 75_000},
     "Cumhurbaşkanı": {"fiyat": 1_000_000, "maas": 50_000},
+    "Kartel Lideri": {"fiyat": 900_000, "maas": 47_000},
     "Mafya Babası": {"fiyat": 750_000, "maas": 42_750},
     "Mafya": {"fiyat": 600_000, "maas": 38_450},
+    "Siber Güvenlik Uzmanı": {"fiyat": 650_000, "maas": 40_000},
     "Hacker": {"fiyat": 500_000, "maas": 32_250},
+    "Yapay Zeka Mühendisi": {"fiyat": 450_000, "maas": 30_000},
+    "Yazılım Geliştiricisi": {"fiyat": 80_000, "maas": 18_260},
+    "Uzay Pilotu": {"fiyat": 700_000, "maas": 44_000},
     "Pilot": {"fiyat": 300_000, "maas": 28_000},
     "Avukat": {"fiyat": 175_000, "maas": 24_500},
     "Doktor": {"fiyat": 100_000, "maas": 21_350},
-    "Yazılım Geliştiricisi": {"fiyat": 80_000, "maas": 18_260},
+    "Mühendis": {"fiyat": 120_000, "maas": 22_000},
+    "Polis": {"fiyat": 90_000, "maas": 19_500},
+    "Öğretmen": {"fiyat": 70_000, "maas": 16_000},
     "Çöpçü": {"fiyat": 40_000, "maas": 13_250},
-    "İşsiz": {"fiyat": 1, "maas": 2_000},
+    "Garson": {"fiyat": 25_000, "maas": 10_000},
+    "Kasiyer": {"fiyat": 15_000, "maas": 8_000},
+    "Seyyar Satıcı": {"fiyat": 10_000, "maas": 8_000},
 }
 
 # Meslekleri listele
@@ -2829,6 +2870,81 @@ class BakimView(discord.ui.View):
         await interaction.response.edit_message(embed=admin_main_embed(), view=AdminMainView())
 
 # =====================================================
+# 🌍 OTOMATİK EKONOMİ SİSTEMİ (2 SAATTE BİR)
+# =====================================================
+
+@tasks.loop(hours=2)
+async def otomatik_ekonomi():
+
+    kanal = bot.get_channel(EKONOMI_LOG_KANAL)
+    if not kanal:
+        return
+
+    embed = discord.Embed(
+        title="📊 EwoEkonomi Güncellendi!",
+        color=discord.Color.dark_blue()
+    )
+
+    for varlik, referans in varsayilan_varlikler.items():
+
+        data = economy_col.find_one({"_id": varlik})
+        eski = data["current_price"] if data else referans
+
+        fark_orani = (eski - referans) / referans
+
+        # 🔥 Aşırı yükselmişse sert düşüş ihtimali
+        if fark_orani > 0.50:
+            degisim_yuzde = random.uniform(-0.25, -0.10)
+
+        # 🔥 Aşırı düşmüşse sert toparlanma
+        elif fark_orani < -0.50:
+            degisim_yuzde = random.uniform(0.10, 0.25)
+
+        # 🔥 Normal dalgalanma
+        else:
+            degisim_yuzde = random.uniform(-0.10, 0.10)
+
+        degisim = int(eski * degisim_yuzde)
+        yeni = eski + degisim
+
+        # 🔒 Daha geniş sınırlar
+        minimum = int(referans * 0.20)
+        maximum = int(referans * 6)
+
+        if yeni < minimum:
+            yeni = minimum
+        if yeni > maximum:
+            yeni = maximum
+
+        economy_col.update_one(
+            {"_id": varlik},
+            {"$set": {"current_price": yeni}},
+            upsert=True
+        )
+
+        fark = yeni - eski
+
+        if fark > 0:
+            durum = f"🟢 +{formatla(fark)}"
+        elif fark < 0:
+            durum = f"🔴 -{formatla(abs(fark))}"
+        else:
+            durum = "⚪ Değişim yok"
+
+        embed.add_field(
+            name=f"{varlik} ({durum})",
+            value=f"Eski: {formatla(eski)}\nYeni: {formatla(yeni)}",
+            inline=False
+        )
+
+    if bot.user.avatar:
+        embed.set_thumbnail(url=bot.user.avatar.url)
+
+    embed.set_footer(text="EwoBot Global Ekonomi Sistemi")
+
+    await kanal.send(embed=embed)
+
+# =====================================================
 # 🛒 MARKET SİSTEMİ (YÜZÜK DAHİL TAM SÜRÜM)
 # =====================================================
 
@@ -3232,7 +3348,7 @@ async def işletmeler(ctx):
     )
 
     embed.add_field(
-        name="🌾 Çiftlik",
+        name="🌾 Ciftlik",
         value="Fiyat: 450.000\nSaatlik: 9.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
@@ -3250,7 +3366,7 @@ async def işletmeler(ctx):
     )
 
     embed.add_field(
-        name="🏦 Banka Şubesi",
+        name="🏦 Bankasubesi",
         value="Fiyat: 3.500.000\nSaatlik: 75.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
@@ -3262,7 +3378,7 @@ async def işletmeler(ctx):
     )
 
     embed.add_field(
-        name="🏢 Şirket",
+        name="🏢 Sirket",
         value="Fiyat: 8.000.000\nSaatlik: 180.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
@@ -4141,12 +4257,97 @@ async def sdüellocular(ctx):
 
     await ctx.send(embed=embed)
 
+# Admin Prefix Ayarlama
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def prefix(ctx, yeni_prefix=None):
+
+    if not ctx.guild:
+        return await ctx.send("Bu komut sadece sunucularda kullanılabilir.")
+
+    if not yeni_prefix:
+        data = settings_collection.find_one({"_id": f"guild_{ctx.guild.id}"})
+        mevcut = data.get("prefix") if data and "prefix" in data else "Varsayılan (q!)"
+        return await ctx.send(f"📌 Mevcut prefix: `{mevcut}`")
+
+    if len(yeni_prefix) > 5:
+        return await ctx.send("❌ Prefix en fazla 5 karakter olabilir.")
+
+    settings_collection.update_one(
+        {"_id": f"guild_{ctx.guild.id}"},
+        {"$set": {"prefix": yeni_prefix}},
+        upsert=True
+    )
+
+    await ctx.send(f"✅ Prefix başarıyla `{yeni_prefix}` olarak ayarlandı.")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def prefixsifirla(ctx):
+
+    if not ctx.guild:
+        return
+
+    settings_collection.update_one(
+        {"_id": f"guild_{ctx.guild.id}"},
+        {"$unset": {"prefix": ""}}
+    )
+
+    await ctx.send("♻️ Prefix varsayılana döndü (q!)")
+
+BOT_OWNER_ID = 1271933410251772017
+
+@bot.check
+async def global_kanal_kontrol(ctx):
+
+    # Owner bypass
+    if ctx.author.id == BOT_OWNER_ID:
+        return True
+
+    # DM'de serbest
+    if not ctx.guild:
+        return True
+
+    if await kanal_kilitli_mi(ctx.guild.id, ctx.channel.id):
+        return False
+
+    return True
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def komutkapat(ctx):
+
+    if not ctx.guild:
+        return await ctx.send("Bu komut sadece sunucularda kullanılabilir.")
+
+    settings_collection.update_one(
+        {"_id": f"guild_{ctx.guild.id}"},
+        {"$addToSet": {"disabled_channels": ctx.channel.id}},
+        upsert=True
+    )
+
+    await ctx.send("🔒 Bu kanalda bot komutları kapatıldı.")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def komutaç(ctx):
+
+    if not ctx.guild:
+        return await ctx.send("Bu komut sadece sunucularda kullanılabilir.")
+
+    settings_collection.update_one(
+        {"_id": f"guild_{ctx.guild.id}"},
+        {"$pull": {"disabled_channels": ctx.channel.id}}
+    )
+
+    await ctx.send("🔓 Bu kanalda bot komutları tekrar açıldı.")
+
 
 
 # ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
 
 # =====================================================
-# BOT READY
+# BOT READY (GÜNCEL STABİL)
 # =====================================================
 @bot.event
 async def on_ready():
@@ -4161,9 +4362,9 @@ async def on_ready():
     print(f"Sunucu sayısı: {len(bot.guilds)}")
     print("===================================")
 
-    duel_timeout_checker.start()
+    await bot.wait_until_ready()
 
-    # Invite cache doldur
+    # 🔹 Invite Cache
     for guild in bot.guilds:
         try:
             invites = await guild.invites()
@@ -4171,47 +4372,56 @@ async def on_ready():
         except Exception as e:
             print(f"Invite cache hatası ({guild.name}): {e}")
 
-    # Persistent View
+    # 🔹 Persistent View
     try:
         bot.add_view(TicketPanelView())
         print("TicketPanelView yüklendi")
     except Exception as e:
         print("TicketPanelView yüklenemedi:", e)
 
-    await bot.wait_until_ready()
+    # =====================================================
+    # LOOPLAR (GÜVENLİ BAŞLATMA)
+    # =====================================================
 
-    # Looplar
-    try:
-        if not durum_degistir.is_running():
-            durum_degistir.start()
-    except Exception as e:
-        print("Durum loop hatası:", e)
+    loops = [
+        duel_timeout_checker,
+        durum_degistir,
+        otomatik_gzenginler,
+        enflasyon_gonder,
+        otomatik_ekonomi  # EKONOMİ LOOPU DA EKLENDİ
+    ]
 
-    try:
-        if not otomatik_gzenginler.is_running():
-            otomatik_gzenginler.start()
-    except Exception as e:
-        print("Global zenginler loop hatası:", e)
-
-    try:
-        if not enflasyon_gonder.is_running():
-            enflasyon_gonder.start()
-    except Exception as e:
-        print("Enflasyon loop hatası:", e)
+    for loop in loops:
+        try:
+            if not loop.is_running():
+                loop.start()
+                print(f"{loop.__name__} başlatıldı.")
+        except Exception as e:
+            print(f"{loop.__name__} başlatma hatası:", e)
 
 @tasks.loop(seconds=10)
 async def duel_timeout_checker():
+
     now = time.time()
 
     for duel_id, duel in list(active_duels.items()):
-        if now - duel["last_action"] > DUEL_TIMEOUT:
 
-            loser = duel["turn"]
-            winner = duel["p1"] if loser == duel["p2"] else duel["p2"]
+        try:
+            if now - duel["last_action"] > DUEL_TIMEOUT:
 
-            channel = bot.get_channel(duel["channel_id"])
-            if channel:
-                await finish_duel(duel_id, winner, loser, channel)
+                loser = duel["turn"]
+                winner = duel["p1"] if loser == duel["p2"] else duel["p2"]
+
+                channel = bot.get_channel(duel["channel_id"])
+
+                if channel:
+                    await finish_duel(duel_id, winner, loser, channel)
+
+                # Düeli temizle
+                active_duels.pop(duel_id, None)
+
+        except Exception as e:
+            print(f"Duel timeout hatası ({duel_id}):", e)
 
 
 @bot.event
