@@ -4382,7 +4382,6 @@ async def on_ready():
     # =====================================================
 
     loops = [
-        duel_timeout_checker,
         durum_degistir,
         otomatik_gzenginler,
         enflasyon_gonder,
