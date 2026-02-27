@@ -1018,7 +1018,7 @@ meslekler = {
 # Meslekleri listele
 @bot.command(name="meslekler")
 @commands.cooldown(1, 4, commands.BucketType.user)
-async def meslekler(ctx):
+async def meslekler_cmd(ctx):
     embed = discord.Embed(title="💼 Mevcut Meslekler", color=discord.Color.purple())
     for isim, veri in meslekler.items():
         embed.add_field(name=isim, value=f"Fiyat: {veri['fiyat']} EwoCoin\nGünlük Maaş: {veri['maas']} EwoCoin", inline=False)
