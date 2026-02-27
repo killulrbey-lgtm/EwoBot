@@ -1063,81 +1063,111 @@ async def meslek_al(ctx, *, secim):
 
 @bot.command()
 async def hesap(ctx):
-    user = get_user(ctx.author.id)
+    try:
+        # Kullanıcı verisini çek
+        user = get_user(ctx.author.id)
 
-    meslek = user.get("meslek", "Yok")
-    maas = meslekler.get(meslek, {}).get("maas", 0)
-    faiz = int(user.get("banka", 0) * 0.05)
+        if not user:
+            await ctx.send("❌ Kullanıcı verisi bulunamadı.")
+            return
 
-    embed = discord.Embed(
-        title="👤 Hesap Bilgilerin",
-        color=discord.Color.blue()
-    )
+        # Güvenli veri çekimleri
+        meslek = user.get("meslek", "Yok")
+        maas = 0
+        if "meslekler" in globals():
+            maas = meslekler.get(meslek, {}).get("maas", 0)
 
-    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        banka = user.get("banka", 0)
+        para = user.get("para", 0)
+        faiz = int(banka * 0.05)
 
-    embed.add_field(name="💰 Nakit", value=formatla(user.get("para", 0)), inline=False)
-    embed.add_field(name="🏦 Banka", value=formatla(user.get("banka", 0)), inline=False)
-    embed.add_field(name="💼 Meslek", value=meslek, inline=False)
-    embed.add_field(name="💵 Günlük Maaş", value=formatla(maas), inline=False)
-    embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=formatla(faiz), inline=False)
+        # Format fonksiyonu güvenliği
+        def safe_format(x):
+            try:
+                return formatla(x)
+            except:
+                return str(x)
 
-    # ✅ PvP Rank Sistemi (EKLENDİ)
-    pvp = user.get("pvp", {})
-    rank_point = pvp.get("rank_point", 0)
-    win = pvp.get("win", 0)
-    lose = pvp.get("lose", 0)
+        embed = discord.Embed(
+            title="👤 Hesap Bilgilerin",
+            color=discord.Color.blue()
+        )
 
-    embed.add_field(
-        name="⚔️ Düello Rank",
-        value=f"🏆 Rank: {get_rank_name(rank_point)}\n"
-              f"⭐ Puan: {rank_point}\n"
-              f"🥇 Win: {win} | ❌ Lose: {lose}",
-        inline=False
-    )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
 
-    # Aktif Rozet
-    aktif_rozet = user.get("aktif_rozet")
-    if aktif_rozet:
-        embed.add_field(name="👑 Aktif Rozet", value=aktif_rozet, inline=False)
+        embed.add_field(name="💰 Nakit", value=safe_format(para), inline=False)
+        embed.add_field(name="🏦 Banka", value=safe_format(banka), inline=False)
+        embed.add_field(name="💼 Meslek", value=meslek, inline=False)
+        embed.add_field(name="💵 Günlük Maaş", value=safe_format(maas), inline=False)
+        embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=safe_format(faiz), inline=False)
 
-    # Eş
-    es_id = user.get("married_to")
-    if es_id:
+        # ================= PvP =================
+        pvp = user.get("pvp", {}) or {}
+        rank_point = pvp.get("rank_point", 0)
+        win = pvp.get("win", 0)
+        lose = pvp.get("lose", 0)
+
         try:
-            es_user = await bot.fetch_user(int(es_id))
-            embed.add_field(name="💍 Eşi", value=es_user.name, inline=False)
+            rank_name = get_rank_name(rank_point)
         except:
-            embed.add_field(name="💍 Eşi", value="Bilinmiyor", inline=False)
+            rank_name = "Unranked"
 
-    # Yatırımlar
-    yatirimlar = user.get("yatirimlar", {})
-    text = ""
+        embed.add_field(
+            name="⚔️ Düello Rank",
+            value=f"🏆 Rank: {rank_name}\n"
+                  f"⭐ Puan: {rank_point}\n"
+                  f"🥇 Win: {win} | ❌ Lose: {lose}",
+            inline=False
+        )
 
-    for varlik, adet in yatirimlar.items():
-        if adet > 0:
-            text += f"💎 {varlik.capitalize()}: {adet} adet\n"
+        # ================= Rozet =================
+        aktif_rozet = user.get("aktif_rozet")
+        if aktif_rozet:
+            embed.add_field(name="👑 Aktif Rozet", value=aktif_rozet, inline=False)
 
-    if text == "":
-        text = "Yatırım yok."
+        # ================= Eş =================
+        es_id = user.get("married_to")
+        if es_id:
+            try:
+                es_user = bot.get_user(int(es_id)) or await bot.fetch_user(int(es_id))
+                embed.add_field(name="💍 Eşi", value=es_user.name, inline=False)
+            except:
+                embed.add_field(name="💍 Eşi", value="Bilinmiyor", inline=False)
 
-    embed.add_field(name="📦 Varlıkların", value=text, inline=False)
+        # ================= Yatırımlar =================
+        yatirimlar = user.get("yatirimlar", {}) or {}
+        text = ""
 
-    # İşletmeler
-    isletme_text = ""
-    for isim, veri in user.get("isletmeler", {}).items():
-        adet = veri.get("adet", 0)
-        level = veri.get("level", 1)
+        for varlik, adet in yatirimlar.items():
+            if adet > 0:
+                text += f"💎 {varlik.capitalize()}: {adet} adet\n"
 
-        if adet > 0:
-            isletme_text += f"🏭 {isim} x{adet} (Lv.{level})\n"
+        if not text:
+            text = "Yatırım yok."
 
-    if isletme_text == "":
-        isletme_text = "İşletmen yok."
+        embed.add_field(name="📦 Varlıkların", value=text, inline=False)
 
-    embed.add_field(name="🏭 İşletmelerin", value=isletme_text, inline=False)
+        # ================= İşletmeler =================
+        isletmeler = user.get("isletmeler", {}) or {}
+        isletme_text = ""
 
-    await ctx.send(embed=embed)
+        for isim, veri in isletmeler.items():
+            adet = veri.get("adet", 0)
+            level = veri.get("level", 1)
+
+            if adet > 0:
+                isletme_text += f"🏭 {isim} x{adet} (Lv.{level})\n"
+
+        if not isletme_text:
+            isletme_text = "İşletmen yok."
+
+        embed.add_field(name="🏭 İşletmelerin", value=isletme_text, inline=False)
+
+        await ctx.send(embed=embed)
+
+    except Exception as e:
+        print("HESAP KOMUT HATASI:", e)
+        await ctx.send("❌ Hesap bilgileri yüklenirken bir hata oluştu.")
 
 # Dilenme komutu
 @bot.command()
@@ -4087,15 +4117,16 @@ async def on_timeout(self):
 
 async def finish_duel(duel_id, winner, loser, channel):
 
+    if duel_id not in active_duels:
+        return
+
     duel = active_duels[duel_id]
     bet = duel["bet"]
 
-    # Anti boost kontrol (aynı kişiyle son 5 düello)
+    duel_history.setdefault(winner, [])
     history = duel_history[winner]
-    if loser in history[-5:]:
-        anti_boost = True
-    else:
-        anti_boost = False
+
+    anti_boost = loser in history[-5:]
 
     total = bet * 2
 
@@ -4109,6 +4140,7 @@ async def finish_duel(duel_id, winner, loser, channel):
     total += boost
 
     if not anti_boost:
+
         collection.update_one({"_id": str(winner)}, {
             "$inc": {
                 "para": total,
@@ -4118,11 +4150,17 @@ async def finish_duel(duel_id, winner, loser, channel):
             }
         })
 
+        loser_data = get_user(loser)
+        current_point = loser_data.get("pvp", {}).get("rank_point", 0)
+        new_point = max(0, current_point - 15)
+
         collection.update_one({"_id": str(loser)}, {
             "$inc": {
                 "pvp.lose": 1,
-                "pvp.rank_point": -15,
                 "pvp.duel_count": 1
+            },
+            "$set": {
+                "pvp.rank_point": new_point
             }
         })
 
@@ -4361,9 +4399,6 @@ async def duel_timeout_checker():
 
                 if channel:
                     await finish_duel(duel_id, winner, loser, channel)
-
-                # Düelloyu temizle
-                active_duels.pop(duel_id, None)
 
         except Exception as e:
             print(f"Duel timeout hatası ({duel_id}): {e}")
