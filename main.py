@@ -4342,7 +4342,37 @@ async def komutaç(ctx):
 
     await ctx.send("🔓 Bu kanalda bot komutları tekrar açıldı.")
 
+# =====================================================
+# DUEL TIMEOUT LOOP
+# =====================================================
 
+@tasks.loop(seconds=10)
+async def duel_timeout_checker():
+    now = time.time()
+
+    for duel_id, duel in list(active_duels.items()):
+        try:
+            if now - duel["last_action"] > DUEL_TIMEOUT:
+
+                loser = duel["turn"]
+                winner = duel["p1"] if loser == duel["p2"] else duel["p2"]
+
+                channel = bot.get_channel(duel["channel_id"])
+
+                if channel:
+                    await finish_duel(duel_id, winner, loser, channel)
+
+                # Düelloyu temizle
+                active_duels.pop(duel_id, None)
+
+        except Exception as e:
+            print(f"Duel timeout hatası ({duel_id}): {e}")
+
+
+# Bot tamamen hazır olmadan loop başlamasın
+@duel_timeout_checker.before_loop
+async def before_duel_timeout_checker():
+    await bot.wait_until_ready()
 
 # =====================================================
 # BOT READY (STABİL & TEMİZ)
@@ -4351,7 +4381,6 @@ async def komutaç(ctx):
 @bot.event
 async def on_ready():
 
-    # Tek sefer çalışması için koruma
     if getattr(bot, "ready_once", False):
         return
 
@@ -4362,7 +4391,7 @@ async def on_ready():
     print(f"Sunucu sayısı: {len(bot.guilds)}")
     print("===================================")
 
-    # 🔹 Invite Cache
+    # Invite Cache
     for guild in bot.guilds:
         try:
             invites = await guild.invites()
@@ -4370,18 +4399,16 @@ async def on_ready():
         except Exception as e:
             print(f"Invite cache hatası ({guild.name}): {e}")
 
-    # 🔹 Persistent View
+    # Persistent View
     try:
         bot.add_view(TicketPanelView())
         print("TicketPanelView yüklendi")
     except Exception as e:
         print("TicketPanelView yüklenemedi:", e)
 
-    # =====================================================
-    # LOOPLAR (GÜVENLİ BAŞLATMA)
-    # =====================================================
-
+    # LOOPLAR
     loops = [
+        duel_timeout_checker,
         durum_degistir,
         otomatik_gzenginler,
         enflasyon_gonder,
