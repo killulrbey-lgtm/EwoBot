@@ -4344,14 +4344,14 @@ async def komutaç(ctx):
 
 
 
-# ONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNREADYYYYYYYYYYYYYYYYYY
+# =====================================================
+# BOT READY (STABİL & TEMİZ)
+# =====================================================
 
-# =====================================================
-# BOT READY (GÜNCEL STABİL)
-# =====================================================
 @bot.event
 async def on_ready():
 
+    # Tek sefer çalışması için koruma
     if getattr(bot, "ready_once", False):
         return
 
@@ -4361,8 +4361,6 @@ async def on_ready():
     print(f"{bot.user} aktif!")
     print(f"Sunucu sayısı: {len(bot.guilds)}")
     print("===================================")
-
-    await bot.wait_until_ready()
 
     # 🔹 Invite Cache
     for guild in bot.guilds:
@@ -4388,41 +4386,16 @@ async def on_ready():
         durum_degistir,
         otomatik_gzenginler,
         enflasyon_gonder,
-        otomatik_ekonomi  # EKONOMİ LOOPU DA EKLENDİ
+        otomatik_ekonomi
     ]
 
     for loop in loops:
         try:
             if not loop.is_running():
                 loop.start()
-                print(f"{loop.__name__} başlatıldı.")
+                print(f"{loop.coro.__name__} başlatıldı.")
         except Exception as e:
-            print(f"{loop.__name__} başlatma hatası:", e)
-
-@tasks.loop(seconds=10)
-async def duel_timeout_checker():
-
-    now = time.time()
-
-    for duel_id, duel in list(active_duels.items()):
-
-        try:
-            if now - duel["last_action"] > DUEL_TIMEOUT:
-
-                loser = duel["turn"]
-                winner = duel["p1"] if loser == duel["p2"] else duel["p2"]
-
-                channel = bot.get_channel(duel["channel_id"])
-
-                if channel:
-                    await finish_duel(duel_id, winner, loser, channel)
-
-                # Düeli temizle
-                active_duels.pop(duel_id, None)
-
-        except Exception as e:
-            print(f"Duel timeout hatası ({duel_id}):", e)
-
+            print(f"{loop.coro.__name__} başlatma hatası: {e}")
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
