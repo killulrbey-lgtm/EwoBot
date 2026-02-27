@@ -988,7 +988,7 @@ q!prefixsifirla → Prefixi varsayılana döndürür
     await ctx.send(embed=ekonomi_embed, view=view)
 
 # Meslek ve fiyatları tanımla
-mmeslekler = {
+meslekler = {
 
     "Kripto Milyarderi": {"fiyat": 10_500_000, "maas": 185_000},
     "Dünya Lideri": {"fiyat": 7_500_000, "maas": 110_000},
@@ -1018,7 +1018,7 @@ mmeslekler = {
 # Meslekleri listele
 @bot.command(name="meslekler")
 @commands.cooldown(1, 4, commands.BucketType.user)
-async def meslekler_cmd(ctx):
+async def meslekler(ctx):
     embed = discord.Embed(title="💼 Mevcut Meslekler", color=discord.Color.purple())
     for isim, veri in meslekler.items():
         embed.add_field(name=isim, value=f"Fiyat: {veri['fiyat']} EwoCoin\nGünlük Maaş: {veri['maas']} EwoCoin", inline=False)
@@ -3415,7 +3415,7 @@ async def işletmeler(ctx):
 
     embed.add_field(
         name="👑 Holding",
-        value="Fiyat: 12.000.000\nSaatlik: 300.000\nYükseltme: Fiyat x %40 x Level",
+        value="Fiyat: 14.000.000\nSaatlik: 280.000\nYükseltme: Fiyat x %40 x Level",
         inline=False
     )
 
