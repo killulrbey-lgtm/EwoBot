@@ -4423,84 +4423,6 @@ async def komutaç(ctx):
 
     await ctx.send("🔓 Bu kanalda bot komutları tekrar açıldı.")
 
-# =====================================================
-# DUEL TIMEOUT LOOP
-# =====================================================
-
-@tasks.loop(seconds=10)
-async def duel_timeout_checker():
-    now = time.time()
-
-    for duel_id, duel in list(active_duels.items()):
-        try:
-            if now - duel["last_action"] > DUEL_TIMEOUT:
-
-                loser = duel["turn"]
-                winner = duel["p1"] if loser == duel["p2"] else duel["p2"]
-
-                channel = bot.get_channel(duel["channel_id"])
-
-                if channel:
-                    await finish_duel(duel_id, winner, loser, channel)
-
-        except Exception as e:
-            print(f"Duel timeout hatası ({duel_id}): {e}")
-
-
-# Bot tamamen hazır olmadan loop başlamasın
-@duel_timeout_checker.before_loop
-async def before_duel_timeout_checker():
-    await bot.wait_until_ready()
-
-# =====================================================
-# BOT READY (STABİL & TEMİZ)
-# =====================================================
-
-@bot.event
-async def on_ready():
-
-    if getattr(bot, "ready_once", False):
-        return
-
-    bot.ready_once = True
-
-    print("===================================")
-    print(f"{bot.user} aktif!")
-    print(f"Sunucu sayısı: {len(bot.guilds)}")
-    print("===================================")
-
-    # Invite Cache
-    for guild in bot.guilds:
-        try:
-            invites = await guild.invites()
-            invite_cache[guild.id] = invites
-        except Exception as e:
-            print(f"Invite cache hatası ({guild.name}): {e}")
-
-    # Persistent View
-    try:
-        bot.add_view(TicketPanelView())
-        print("TicketPanelView yüklendi")
-    except Exception as e:
-        print("TicketPanelView yüklenemedi:", e)
-
-    # LOOPLAR
-    loops = [
-        duel_timeout_checker,
-        durum_degistir,
-        otomatik_gzenginler,
-        enflasyon_gonder,
-        otomatik_ekonomi
-    ]
-
-    for loop in loops:
-        try:
-            if not loop.is_running():
-                loop.start()
-                print(f"{loop.coro.__name__} başlatıldı.")
-        except Exception as e:
-            print(f"{loop.coro.__name__} başlatma hatası: {e}")
-
 @tasks.loop(hours=24)
 async def vergi_sistemi():
 
@@ -4586,6 +4508,85 @@ async def baskın(ctx, member: discord.Member, isletme):
     )
 
     await ctx.send(mesaj)
+
+# =====================================================
+# DUEL TIMEOUT LOOP
+# =====================================================
+
+@tasks.loop(seconds=10)
+async def duel_timeout_checker():
+    now = time.time()
+
+    for duel_id, duel in list(active_duels.items()):
+        try:
+            if now - duel["last_action"] > DUEL_TIMEOUT:
+
+                loser = duel["turn"]
+                winner = duel["p1"] if loser == duel["p2"] else duel["p2"]
+
+                channel = bot.get_channel(duel["channel_id"])
+
+                if channel:
+                    await finish_duel(duel_id, winner, loser, channel)
+
+        except Exception as e:
+            print(f"Duel timeout hatası ({duel_id}): {e}")
+
+
+# Bot tamamen hazır olmadan loop başlamasın
+@duel_timeout_checker.before_loop
+async def before_duel_timeout_checker():
+    await bot.wait_until_ready()
+
+# =====================================================
+# BOT READY (STABİL & TEMİZ)
+# =====================================================
+
+@bot.event
+async def on_ready():
+
+    if getattr(bot, "ready_once", False):
+        return
+
+    bot.ready_once = True
+
+    print("===================================")
+    print(f"{bot.user} aktif!")
+    print(f"Sunucu sayısı: {len(bot.guilds)}")
+    print("===================================")
+
+    # Invite Cache
+    for guild in bot.guilds:
+        try:
+            invites = await guild.invites()
+            invite_cache[guild.id] = invites
+        except Exception as e:
+            print(f"Invite cache hatası ({guild.name}): {e}")
+
+    # Persistent View
+    try:
+        bot.add_view(TicketPanelView())
+        print("TicketPanelView yüklendi")
+    except Exception as e:
+        print("TicketPanelView yüklenemedi:", e)
+
+    # LOOPLAR
+    loops = [
+        duel_timeout_checker,
+        durum_degistir,
+        otomatik_gzenginler,
+        enflasyon_gonder,
+        otomatik_ekonomi
+    ]
+
+    for loop in loops:
+        try:
+            if not loop.is_running():
+                loop.start()
+                print(f"{loop.coro.__name__} başlatıldı.")
+        except Exception as e:
+            print(f"{loop.coro.__name__} başlatma hatası: {e}")
+
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
