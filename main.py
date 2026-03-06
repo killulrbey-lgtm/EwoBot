@@ -206,6 +206,19 @@ def get_user(user_id):
         return_document=ReturnDocument.AFTER
     )
 
+def isletme_geliri_hesapla(user, isletme):
+
+    isletmeler = user.get("isletmeler", {})
+
+    if isletme not in isletmeler:
+        return 0
+
+    adet = isletmeler[isletme].get("adet", 0)
+
+    saatlik = ISLETMELER.get(isletme, {}).get("gelir", 0)
+
+    return adet * saatlik
+
 async def xp_ekle(user_id, miktar):
 
     user = get_user(user_id)
@@ -4576,7 +4589,8 @@ async def on_ready():
         durum_degistir,
         otomatik_gzenginler,
         enflasyon_gonder,
-        otomatik_ekonomi
+        otomatik_ekonomi,
+        vergi_sistemi
     ]
 
     for loop in loops:
