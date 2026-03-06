@@ -4383,14 +4383,19 @@ async def vergi_sistemi():
 
     for user in users:
 
-        nakit = user["para"]
-        banka = user["banka"]
+        nakit = user.get("para", 0)
+        banka = user.get("banka", 0)
 
         isletme_degeri = 0
 
         for isim, data in user.get("isletmeler", {}).items():
-            fiyat = ISLETME_FIYATLARI.get(isim,0)
-            adet = data["adet"]
+
+            adet = data.get("adet", 0)
+
+            if isim in ISLETMELER:
+                fiyat = ISLETMELER[isim]["fiyat"]
+            else:
+                fiyat = 0
 
             isletme_degeri += fiyat * adet
 
