@@ -3218,8 +3218,8 @@ async def envanter(ctx):
     text = ""
 
     for urun, adet in envanter.items():
-    if adet <= 0:
-        continue
+        if adet <= 0:
+             continue
 
             # Ürün ikonları
             if urun == "Yüzük":
