@@ -3231,24 +3231,25 @@ async def envanter(ctx):
     text = ""
 
     for urun, adet in envanter.items():
+
         if adet <= 0:
-             continue
+            continue
 
-            # Ürün ikonları
-            if urun == "Yüzük":
-                icon = "💍"
-            elif "Kasa" in urun:
-                icon = "🎁"
-            elif urun == "Silah":
-                icon = "🔫"
-            elif urun == "Özel Koruma":
-                icon = "🛡"
-            elif urun == "Olta":
-                icon = "🎣"
-            else:
-                icon = "📦"
+        # Ürün ikonları
+        if urun == "Yüzük":
+            icon = "💍"
+        elif "Kasa" in urun:
+            icon = "🎁"
+        elif urun == "Silah":
+            icon = "🔫"
+        elif urun == "Özel Koruma":
+            icon = "🛡"
+        elif urun == "Olta":
+            icon = "🎣"
+        else:
+            icon = "📦"
 
-            text += f"{icon} {urun} x{adet}\n"
+        text += f"{icon} {urun} x{adet}\n"
 
     if text == "":
         text = "Envanter boş."
