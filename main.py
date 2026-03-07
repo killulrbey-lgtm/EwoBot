@@ -632,18 +632,20 @@ async def cf(ctx, miktar: str):
     await gorev_kontrol(ctx.author.id, "cf", 1)
     await rozet_kontrol(ctx.author.id)
 
-# level sistemi
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def level(ctx):
 
     user = get_user(ctx.author.id)
 
-    xp = user.get("xp", 0)
-    level = user.get("level", 1)
+    xp = int(user.get("xp", 0))
+    level = int(user.get("level", 1))
 
     gereken = level * 100
-    oran = int((xp / gereken) * 10)
+
+    xp_bar = min(xp, gereken)
+
+    oran = int((xp_bar / gereken) * 10)
 
     bar = "🟩" * oran + "⬜" * (10 - oran)
 
@@ -653,7 +655,7 @@ async def level(ctx):
     )
 
     embed.add_field(name="Seviye", value=f"LVL {level}", inline=True)
-    embed.add_field(name="XP", value=f"{xp} / {gereken}", inline=True)
+    embed.add_field(name="XP", value=f"{xp_bar} / {gereken}", inline=True)
     embed.add_field(name="İlerleme", value=bar, inline=False)
 
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
@@ -1450,8 +1452,9 @@ async def yuksekdusuk(ctx, miktar: str, secim: str):
     if secim not in ["yuksek", "dusuk"]:
         return await ctx.send("❌ Seçim: yuksek / dusuk")
 
+    # miktar kontrol
     if miktar.lower() == "all":
-        miktar = min(user["para"], MAX_BET)
+        miktar = min(user.get("para", 0), MAX_BET)
     else:
         if not miktar.isdigit():
             return await ctx.send("❌ Geçerli miktar gir.")
@@ -1463,9 +1466,10 @@ async def yuksekdusuk(ctx, miktar: str, secim: str):
     if miktar > MAX_BET:
         return await ctx.send("❌ Maksimum 100.000 oynayabilirsin.")
 
-    if user["para"] < miktar:
+    if user.get("para", 0) < miktar:
         return await ctx.send("❌ Paran yetmiyor.")
 
+    # bahis düş
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": -miktar, "yuksekdusuk_sayisi": 1}}
@@ -1476,25 +1480,52 @@ async def yuksekdusuk(ctx, miktar: str, secim: str):
 
     sayi = random.randint(1, 100)
 
-    win_chance = hesapla_win_chance(user)
-    kazandi = random.random() < win_chance
+    # gerçek oyun mantığı
+    if secim == "yuksek":
+        kazandi = sayi > 50
+    else:
+        kazandi = sayi <= 50
 
     if kazandi:
+
         kazanc = miktar * 2
+
         collection.update_one(
             {"_id": str(ctx.author.id)},
-            {"$inc": {"para": kazanc, "toplam_kazanc": kazanc}}
+            {
+                "$inc": {
+                    "para": kazanc,
+                    "toplam_kazanc": kazanc
+                }
+            }
         )
-        sonuc = f"🎯 Sayı: {sayi}\n🎉 Kazandın! +{formatla(kazanc)}"
+
+        sonuc = (
+            f"🎯 Sayı: **{sayi}**\n"
+            f"🎉 Kazandın!\n"
+            f"💰 +{formatla(kazanc)}"
+        )
+
     else:
+
         collection.update_one(
             {"_id": str(ctx.author.id)},
-            {"$inc": {"toplam_kayip": miktar}}
+            {
+                "$inc": {
+                    "toplam_kayip": miktar
+                }
+            }
         )
-        sonuc = f"🎯 Sayı: {sayi}\n💀 Kaybettin!"
+
+        sonuc = (
+            f"🎯 Sayı: **{sayi}**\n"
+            f"💀 Kaybettin!\n"
+            f"💸 -{formatla(miktar)}"
+        )
 
     await ctx.send(sonuc)
 
+    # xp ve görev
     await xp_ekle(ctx.author.id, 5)
     await gorev_kontrol(ctx.author.id, "yuksekdusuk", 1)
     await rozet_kontrol(ctx.author.id)
@@ -3798,7 +3829,7 @@ async def işletmeparaçek(ctx):
     user = get_user(ctx.author.id)
     simdi = int(time.time())
 
-    son = user.get("son_isletme_toplama", 0)
+    son = int(user.get("son_isletme_toplama", 0))
 
     if son == 0:
         collection.update_one(
@@ -3807,7 +3838,7 @@ async def işletmeparaçek(ctx):
         )
         return await ctx.send("⏳ Sistem başlatıldı.")
 
-    saat = (simdi - son) // 3600
+    saat = int((simdi - son) // 3600)
 
     if saat <= 0:
         return await ctx.send("⏳ Henüz gelir oluşmadı.")
@@ -3819,23 +3850,22 @@ async def işletmeparaçek(ctx):
         )
         return await ctx.send("🔥 Geliri zamanında çekmedin. Hepsi yandı.")
 
-    if saat > 24:
-        saat = 24
+    saat = min(saat, 24)
 
     toplam = 0
 
     for isim, veri in user.get("isletmeler", {}).items():
 
-        adet = veri.get("adet", 0)
-        level = veri.get("level", 1)
+        adet = int(veri.get("adet", 0))
+        level = int(veri.get("level", 1))
 
         if isim not in ISLETMELER:
             continue
 
-        base = ISLETMELER[isim]["gelir"]
+        base = int(ISLETMELER[isim]["gelir"])
 
-        gelir = int(base * adet * saat * (1 + (level - 1) * 0.10))
-        toplam += gelir
+        gelir = base * adet * saat * (1 + (level - 1) * 0.10)
+        toplam += int(gelir)
 
     if toplam <= 0:
         return await ctx.send("❌ İşletmen yok.")
@@ -3843,7 +3873,7 @@ async def işletmeparaçek(ctx):
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {
-            "$inc": {"para": toplam},
+            "$inc": {"para": int(toplam)},
             "$set": {"son_isletme_toplama": simdi}
         }
     )
@@ -3851,7 +3881,7 @@ async def işletmeparaçek(ctx):
     await ctx.send(
         f"🏭 Gelir toplandı\n"
         f"🕒 Süre: {saat} saat\n"
-        f"💰 Kazanç: {formatla(toplam)}"
+        f"💰 Kazanç: {formatla(int(toplam))}"
     )
 
 # EVLENME
