@@ -9,6 +9,7 @@ from flask import Flask
 from threading import Thread
 import pymongo
 from collections import defaultdict
+import uuid
 
 # ================= MONGO =================
 
@@ -4754,20 +4755,22 @@ async def baskın(ctx, member: discord.Member, *, isletme: str):
     )
 
     await ctx.send(mesaj)
+# =========================
+# MAFYA KUR
+# =========================
 
-# MAFYA SİSTEMİ
 @bot.command(name="mafyakur")
 async def mafyakur(ctx, isim: str):
 
     user = get_user(ctx.author.id)
 
-    if user["mafia_id"]:
+    if user.get("mafia_id"):
         return await ctx.send("❌ Zaten bir mafyadasın.")
 
-    if user["level"] < 5:
+    if user.get("level",0) < 5:
         return await ctx.send("❌ Mafya kurmak için **5 level** olmalısın.")
 
-    if user["cash"] < 1_000_000:
+    if user.get("cash",0) < 1_000_000:
         return await ctx.send("❌ Mafya kurmak için **1.000.000** para gerekli.")
 
     if mafia_col.find_one({"name": isim}):
@@ -4800,21 +4803,22 @@ async def mafyakur(ctx, isim: str):
         description=f"""
 **Mafya Adı:** {isim}
 **Kurucu:** {ctx.author.mention}
-
-Artık kendi suç imparatorluğunu kurabilirsin.
 """,
         color=0x000000
     )
 
     await ctx.send(embed=embed)
 
-#mafya bilgi
+# =========================
+# MAFYA BİLGİ
+# =========================
+
 @bot.command(name="mafya")
 async def mafya_bilgi(ctx):
 
     user = get_user(ctx.author.id)
 
-    if not user["mafia_id"]:
+    if not user.get("mafia_id"):
         return await ctx.send("❌ Mafyada değilsin.")
 
     mafia = mafia_col.find_one({"_id": user["mafia_id"]})
@@ -4828,13 +4832,16 @@ async def mafya_bilgi(ctx):
 
     await ctx.send(embed=embed)
 
-#mafya davet
+# =========================
+# MAFYA DAVET
+# =========================
+
 @bot.command()
 async def mafyadavet(ctx, member: discord.Member):
 
     user = get_user(ctx.author.id)
 
-    if user["mafia_role"] != "leader":
+    if user.get("mafia_role") != "leader":
         return await ctx.send("❌ Sadece lider davet edebilir.")
 
     mafia = mafia_col.find_one({"_id": user["mafia_id"]})
@@ -4844,31 +4851,34 @@ async def mafyadavet(ctx, member: discord.Member):
 
     mafia_invites.update_one(
         {"user": member.id},
-        {"$push": {"invites": mafia["_id"]}},
+        {"$addToSet": {"invites": mafia["_id"]}},
         upsert=True
     )
 
     await ctx.send(f"📨 {member.mention} mafyaya davet edildi.")
 
-#mafya ayrıl
+# =========================
+# MAFYA KABUL
+# =========================
+
 @bot.command()
 async def mafyakabul(ctx):
 
     data = mafia_invites.find_one({"user": ctx.author.id})
 
-    if not data:
+    if not data or not data["invites"]:
         return await ctx.send("❌ Davetin yok.")
 
     invites = data["invites"]
 
     if len(invites) == 1:
         mafia_id = invites[0]
+
     else:
 
         msg = "Hangi mafyaya katılmak istiyorsun?\n"
 
         for i, m in enumerate(invites):
-
             mafia = mafia_col.find_one({"_id": m})
             msg += f"{i+1}. {mafia['name']}\n"
 
@@ -4883,6 +4893,9 @@ async def mafyakabul(ctx):
 
     mafia = mafia_col.find_one({"_id": mafia_id})
 
+    if len(mafia["members"]) >= mafia["capacity"]:
+        return await ctx.send("❌ Mafya dolu.")
+
     mafia_col.update_one(
         {"_id": mafia_id},
         {"$push": {"members": ctx.author.id}}
@@ -4893,47 +4906,14 @@ async def mafyakabul(ctx):
         {"$set": {"mafia_id": mafia_id, "mafia_role": "member"}}
     )
 
+    mafia_invites.delete_one({"user": ctx.author.id})
+
     await ctx.send(f"✅ {mafia['name']} mafyasına katıldın.")
 
-#mafya yükselt
-UPGRADE_COST = {
-5: (7, 1_500_000),
-7: (10, 2_000_000),
-10: (15, 3_000_000)
-}
+# =========================
+# MAFYA GÜÇ
+# =========================
 
-class MafiaUpgrade(discord.ui.View):
-
-    def __init__(self, ctx, mafia):
-        super().__init__()
-        self.ctx = ctx
-        self.mafia = mafia
-
-    @discord.ui.button(label="Yükselt", style=discord.ButtonStyle.green)
-    async def upgrade(self, interaction, button):
-
-        cap = self.mafia["capacity"]
-
-        if cap not in UPGRADE_COST:
-            return await interaction.response.send_message("Max level", ephemeral=True)
-
-        new_cap, cost = UPGRADE_COST[cap]
-
-        user = get_user(self.ctx.author.id)
-
-        if user["cash"] < cost:
-            return await interaction.response.send_message("Paran yok.", ephemeral=True)
-
-        users.update_one({"_id": self.ctx.author.id},{"$inc":{"cash":-cost}})
-
-        mafia_col.update_one(
-            {"_id": self.mafia["_id"]},
-            {"$set": {"capacity": new_cap}}
-        )
-
-        await interaction.response.send_message("✅ Kapasite artırıldı.")
-
-#mafya savaş
 def mafia_power(mafia):
 
     total = 0
@@ -4944,21 +4924,30 @@ def mafia_power(mafia):
 
     return total
 
+# =========================
+# MAFYA SAVAŞ
+# =========================
+
 @bot.command()
 async def mafyasavas(ctx, isim):
 
-    attacker = mafia_col.find_one({"_id": get_user(ctx.author.id)["mafia_id"]})
+    user = get_user(ctx.author.id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Bir mafyada değilsin.")
+
+    attacker = mafia_col.find_one({"_id": user["mafia_id"]})
     defender = mafia_col.find_one({"name": isim})
 
     if not defender:
-        return await ctx.send("Mafya bulunamadı.")
+        return await ctx.send("❌ Mafya bulunamadı.")
 
     p1 = mafia_power(attacker)
     p2 = mafia_power(defender)
 
     winner = attacker if p1 > p2 else defender
 
-    reward = 500_000
+    reward = 500000
 
     mafia_col.update_one({"_id":winner["_id"]},{"$inc":{"wins":1}})
 
@@ -4974,9 +4963,7 @@ async def mafyasavas(ctx, isim):
         else:
             users.update_one({"_id":m},{"$inc":{"cash":share}})
 
-    embed = discord.Embed(
-        title="🔥 MAFYA SAVAŞI"
-    )
+    embed = discord.Embed(title="🔥 MAFYA SAVAŞI")
 
     embed.add_field(name=attacker["name"],value=f"{p1} güç")
     embed.add_field(name=defender["name"],value=f"{p2} güç")
@@ -4984,18 +4971,32 @@ async def mafyasavas(ctx, isim):
 
     await ctx.send(embed=embed)
 
-#baskın
+# =========================
+# MAFYA BASKIN
+# =========================
+
 @bot.command()
 async def mafyabaskın(ctx, isim):
 
-    attacker = mafia_col.find_one({"_id": get_user(ctx.author.id)["mafia_id"]})
+    user = get_user(ctx.author.id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Mafyada değilsin.")
+
+    attacker = mafia_col.find_one({"_id": user["mafia_id"]})
     defender = mafia_col.find_one({"name": isim})
+
+    if not defender:
+        return await ctx.send("❌ Mafya bulunamadı.")
 
     chance = random.randint(1,100)
 
     if chance <= 60:
 
         steal = random.randint(100000,300000)
+
+        if defender["bank"] < steal:
+            steal = defender["bank"]
 
         mafia_col.update_one(
             {"_id":defender["_id"]},
@@ -5020,7 +5021,10 @@ async def mafyabaskın(ctx, isim):
 
         await ctx.send("🚔 Baskın başarısız oldu.")
 
-# SMafyalar 
+# =========================
+# SUNUCU MAFYALARI
+# =========================
+
 @bot.command()
 async def smafyalar(ctx):
 
@@ -5038,7 +5042,10 @@ async def smafyalar(ctx):
 
     await ctx.send(embed=embed)
 
-#GMAFYALAR
+# =========================
+# GLOBAL MAFYA
+# =========================
+
 @bot.command()
 async def gmafyalar(ctx):
 
@@ -5055,6 +5062,43 @@ async def gmafyalar(ctx):
         )
 
     await ctx.send(embed=embed)
+
+# =========================
+# GLOBAL BOARD
+# =========================
+
+@tasks.loop(hours=2)
+async def mafia_board():
+
+    global mafia_msg
+
+    guild = bot.get_guild(1471843922115301493)
+    if not guild:
+        return
+
+    channel = guild.get_channel(1479642291663802569)
+    if not channel:
+        return
+
+    mafias = mafia_col.find().sort("wins",-1).limit(10)
+
+    embed = discord.Embed(
+        title="🌍 Global Mafya Liderliği",
+        color=0x000000
+    )
+
+    for i, mafia in enumerate(mafias, 1):
+
+        embed.add_field(
+            name=f"{i}. {mafia['name']}",
+            value=f"{mafia['wins']} savaş",
+            inline=False
+        )
+
+    if mafia_msg:
+        await mafia_msg.edit(embed=embed)
+    else:
+        mafia_msg = await channel.send(embed=embed)
 
 @tasks.loop(hours=2)
 async def mafia_board():
@@ -5118,10 +5162,6 @@ async def duel_timeout_checker():
 async def before_duel_timeout_checker():
     await bot.wait_until_ready()
 
-# =====================================================
-# BOT READY (STABİL & TEMİZ)
-# =====================================================
-
 @bot.event
 async def on_ready():
 
@@ -5165,9 +5205,11 @@ async def on_ready():
         try:
             if not loop.is_running():
                 loop.start()
-                print(f"{loop.coro.__name__} başlatıldı.")
+                print(f"{loop.__name__} başlatıldı.")
         except Exception as e:
-            print(f"{loop.coro.__name__} başlatma hatası: {e}")
+            print(f"{loop.__name__} başlatma hatası: {e}")
+
+    print("Tüm sistemler başarıyla başlatıldı.")
 
 
 @bot.event
