@@ -4793,7 +4793,7 @@ async def mafyakur(ctx, isim: str):
     mafia_col.insert_one(mafia)
 
     users.update_one(
-        {"_id": str(ctx.author.id)},
+        {"_id": str(ctx.author.id)},   # BURASI ÇOK ÖNEMLİ
         {
             "$set": {
                 "mafia_id": mafia_id,
@@ -4810,14 +4810,11 @@ async def mafyakur(ctx, isim: str):
         description=f"""
 **Mafya Adı:** {isim}
 **Kurucu:** {ctx.author.mention}
-
-Artık suç imparatorluğunu kurdun.
 """,
         color=0x000000
     )
 
     await ctx.send(embed=embed)
-
 # =========================
 # MAFYA BİLGİ
 # =========================
