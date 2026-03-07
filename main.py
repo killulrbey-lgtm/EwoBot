@@ -688,7 +688,6 @@ async def level(ctx):
 @commands.cooldown(1, 15, commands.BucketType.user)
 async def slot(ctx, miktar: str):
 
-    MAX_BET = 100000
     user = get_user(ctx.author.id)
 
     if miktar.lower() == "all":
