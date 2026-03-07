@@ -92,14 +92,22 @@ bot = commands.Bot(
 )
 
 ISLETMELER = {
-    "maden": {"fiyat": 300000, "gelir": 6000},
-    "ciftlik": {"fiyat": 450000, "gelir": 9000},
-    "otel": {"fiyat": 900000, "gelir": 20000},
-    "fabrika": {"fiyat": 2000000, "gelir": 45000},
-    "bankasubesi": {"fiyat": 3500000, "gelir": 75000},
-    "liman": {"fiyat": 5000000, "gelir": 110000},
-    "sirket": {"fiyat": 8000000, "gelir": 180000},
-    "holding": {"fiyat": 14000000, "gelir": 280000}
+
+    "maden": {"fiyat": 300000, "gelir": 4000},
+    "ciftlik": {"fiyat": 450000, "gelir": 7000},
+    "otel": {"fiyat": 900000, "gelir": 14000},
+    "fabrika": {"fiyat": 2000000, "gelir": 32500},
+    "bankasubesi": {"fiyat": 3500000, "gelir": 52500},
+    "liman": {"fiyat": 5000000, "gelir": 87500},
+    "sirket": {"fiyat": 8000000, "gelir": 148750},
+    "holding": {"fiyat": 14000000, "gelir": 225000},
+
+    # YENİ İŞLETMELER
+    "teknolojiparki": {"fiyat": 35000000, "gelir": 275000},
+    "megafabrika": {"fiyat": 100000000, "gelir": 330000},
+    "globalsirket": {"fiyat": 500000000, "gelir": 485000},
+    "uzaymadeni": {"fiyat": 2000000000, "gelir": 520000}
+
 }
 
 invite_cache = {}
@@ -921,6 +929,8 @@ q!düello @kullanıcı <bahis> → Başka kullanıcılarla düello yaparsınız
 q!rank → Düello rankınızı gösterir
 q!gdüellocular → En fazla WİN'e sahip 10 kişiyi sıralar
 q!sdüellocular → Sunucuda En fazla WİN'e sahip 10 kişiyi sıralar
+q!baskın → Başka kullanıcının İşletme gelirini soyar
+
 q!soygun → Başka kullanıcıyı soygun yap
 q!enflasyon → Toplam EwoCoin miktarı
 q!kasaaç <Kasaadi> → Kasa açar
@@ -1080,45 +1090,80 @@ async def meslek_al(ctx, *, secim):
 @commands.cooldown(1, 7, commands.BucketType.user)
 async def hesap(ctx):
     try:
-        # Kullanıcı verisini çek
+
         user = get_user(ctx.author.id)
 
         if not user:
             await ctx.send("❌ Kullanıcı verisi bulunamadı.")
             return
 
-        # Güvenli veri çekimleri
         meslek = user.get("meslek", "Yok")
         maas = 0
+
         if "meslekler" in globals():
             maas = meslekler.get(meslek, {}).get("maas", 0)
 
         banka = user.get("banka", 0)
         para = user.get("para", 0)
+
         faiz = int(banka * 0.05)
 
-        # Format fonksiyonu güvenliği
         def safe_format(x):
             try:
                 return formatla(x)
             except:
                 return str(x)
 
+        envanter = user.get("envanter", {}) or {}
+
+        # ================= GÖRÜNÜŞ =================
+
+        gosteris = None
+        renk = discord.Color.blue()
+
+        for item in ["Elmas Görünüş", "Altın Görünüş", "Gümüş Görünüş", "Bronz Görünüş"]:
+            if envanter.get(item, 0) > 0:
+                gosteris = item
+
+        if gosteris == "Elmas Görünüş":
+            renk = discord.Color.from_rgb(0,255,255)
+
+        elif gosteris == "Altın Görünüş":
+            renk = discord.Color.gold()
+
+        elif gosteris == "Gümüş Görünüş":
+            renk = discord.Color.light_grey()
+
+        elif gosteris == "Bronz Görünüş":
+            renk = discord.Color.orange()
+
         embed = discord.Embed(
-            title="👤 Hesap Bilgilerin",
-            color=discord.Color.blue()
+            title=f"👤 {ctx.author.name} Hesabı",
+            color=renk
         )
 
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
 
-        embed.add_field(name="💰 Nakit", value=safe_format(para), inline=False)
-        embed.add_field(name="🏦 Banka", value=safe_format(banka), inline=False)
-        embed.add_field(name="💼 Meslek", value=meslek, inline=False)
-        embed.add_field(name="💵 Günlük Maaş", value=safe_format(maas), inline=False)
-        embed.add_field(name="📈 Günlük Banka Faizi (%5)", value=safe_format(faiz), inline=False)
+        # ================= PARA =================
+
+        embed.add_field(name="💰 Nakit", value=safe_format(para), inline=True)
+        embed.add_field(name="🏦 Banka", value=safe_format(banka), inline=True)
+
+        embed.add_field(
+            name="📈 Günlük Banka Faizi (%5)",
+            value=safe_format(faiz),
+            inline=False
+        )
+
+        # ================= MESLEK =================
+
+        embed.add_field(name="💼 Meslek", value=meslek, inline=True)
+        embed.add_field(name="💵 Günlük Maaş", value=safe_format(maas), inline=True)
 
         # ================= PvP =================
+
         pvp = user.get("pvp", {}) or {}
+
         rank_point = pvp.get("rank_point", 0)
         win = pvp.get("win", 0)
         lose = pvp.get("lose", 0)
@@ -1130,31 +1175,26 @@ async def hesap(ctx):
 
         embed.add_field(
             name="⚔️ Düello Rank",
-            value=f"🏆 Rank: {rank_name}\n"
-                  f"⭐ Puan: {rank_point}\n"
-                  f"🥇 Win: {win} | ❌ Lose: {lose}",
+            value=f"🏆 Rank: {rank_name}\n⭐ Puan: {rank_point}\n🥇 Win: {win} | ❌ Lose: {lose}",
             inline=False
         )
 
-        # ================= Rozet =================
+        # ================= ROZET =================
+
         aktif_rozet = user.get("aktif_rozet")
+
         if aktif_rozet:
             embed.add_field(name="👑 Aktif Rozet", value=aktif_rozet, inline=False)
 
-        # ================= Görünüş =================
-        envanter = user.get("envanter", {}) or {}
-
-        gosteris = None
-
-        for item in ["Elmas Görünüş", "Altın Görünüş", "Gümüş Görünüş", "Bronz Görünüş"]:
-            if envanter.get(item, 0) > 0:
-                gosteris = item
+        # ================= GÖRÜNÜŞ =================
 
         if gosteris:
             embed.add_field(name="✨ Görünüş", value=gosteris, inline=False)
 
-        # ================= Eş =================
+        # ================= EŞ =================
+
         es_id = user.get("married_to")
+
         if es_id:
             try:
                 es_user = bot.get_user(int(es_id)) or await bot.fetch_user(int(es_id))
@@ -1162,11 +1202,13 @@ async def hesap(ctx):
             except:
                 embed.add_field(name="💍 Eşi", value="Bilinmiyor", inline=False)
 
-        # ================= Yatırımlar =================
+        # ================= YATIRIMLAR =================
+
         yatirimlar = user.get("yatirimlar", {}) or {}
         text = ""
 
         for varlik, adet in yatirimlar.items():
+
             if adet > 0:
                 text += f"💎 {varlik.capitalize()}: {adet} adet\n"
 
@@ -1175,21 +1217,27 @@ async def hesap(ctx):
 
         embed.add_field(name="📦 Varlıkların", value=text, inline=False)
 
-        # ================= İşletmeler =================
+        # ================= İŞLETMELER =================
+
         isletmeler = user.get("isletmeler", {}) or {}
         isletme_text = ""
 
         for isim, veri in isletmeler.items():
+
             adet = veri.get("adet", 0)
             level = veri.get("level", 1)
 
             if adet > 0:
-                isletme_text += f"🏭 {isim} x{adet} (Lv.{level})\n"
+                isletme_text += f"🏭 {isim.capitalize()} x{adet} (Lv.{level})\n"
 
         if not isletme_text:
             isletme_text = "İşletmen yok."
 
         embed.add_field(name="🏭 İşletmelerin", value=isletme_text, inline=False)
+
+        embed.set_footer(
+            text="EwoBot Ekonomi Sistemi"
+        )
 
         await ctx.send(embed=embed)
 
@@ -1753,7 +1801,7 @@ async def gzenginler(ctx):
 # 🔁 10 DAKİKADA BİR GLOBAL EwoPlusCoin
 # =====================================================
 
-GLOBAL_ZENGINLER_KANAL_ID = 1474500301758267565
+GLOBAL_ZENGINLER_KANAL_ID = 1479627190864838778
 global_zenginler_mesaj_id = None
 
 
@@ -1866,7 +1914,7 @@ async def enflasyon(ctx):
 # 📈 ENFLASYON OTOMATİK (SAFE VERSION)
 # =====================================================
 
-ENFLASYON_KANAL_ID = 1474499745257881762
+ENFLASYON_KANAL_ID = 1479627407978795191
 enflasyon_mesaj_id = None
 
 
@@ -2670,7 +2718,7 @@ class TicketPanelView(discord.ui.View):
 
 ADMIN_ID = 1271933410251772017
 BAKIM_KANAL_ID = 1474489287859769656
-EKONOMI_LOG_KANAL = 1474499591238848555
+EKONOMI_LOG_KANAL = 1479627767111876759
 
 # =====================================================
 # YARDIMCI FONKSİYON
@@ -3019,10 +3067,11 @@ async def otomatik_ekonomi():
     await kanal.send(embed=embed)
 
 # =====================================================
-# 🛒 MARKET SİSTEMİ (YÜZÜK + GÖSTERİŞ + ARAÇGEREÇLER)
+# 🛒 MARKET SİSTEMİ
 # =====================================================
 
 MARKET_URUNLERI = {
+
     "Bronz Kasa": {"fiyat": 500},
     "Gümüş Kasa": {"fiyat": 2000},
     "Altın Kasa": {"fiyat": 5000},
@@ -3042,60 +3091,40 @@ MARKET_URUNLERI = {
     "Elmas Görünüş": {"fiyat": 15000000},
 
     "Özel Araçgereçler": {"fiyat": 750000}
+
 }
 
-
 @bot.command()
-@commands.cooldown(1, 10, commands.BucketType.user)
 async def market(ctx):
+
     embed = market_ana_embed()
     embed.set_thumbnail(url=bot.user.avatar.url)
-    await ctx.send(embed=embed, view=MarketMainView())
 
+    await ctx.send(
+        embed=embed,
+        view=MarketMainView()
+    )
 
 def market_ana_embed():
+
     return discord.Embed(
         title="🛒 EwoBot Market",
-        description=(
-            "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🎁 **KASA KATEGORİSİ**\n\n"
-            "🟤 Bronz Kasa\n"
-            "⚪ Gümüş Kasa\n"
-            "🟡 Altın Kasa\n"
-            "💎 Elmas Kasa\n"
-            "🌟 Premium Kasa\n"
-            "🔥 EwoPlus Kasa\n\n"
-
-            "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🕶 **SOYGUN KATEGORİSİ**\n\n"
-            "🔫 Silah\n"
-            "🛡 Özel Koruma\n"
-            "🧰 Özel Araçgereçler\n\n"
-
-            "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🎣 **EKONOMİ KATEGORİSİ**\n\n"
-            "🎣 Olta\n"
-            "💍 Yüzük\n\n"
-
-            "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "👑 **GÖSTERİŞ KATEGORİSİ**\n\n"
-            "🥉 Bronz Görünüş\n"
-            "🥈 Gümüş Görünüş\n"
-            "🥇 Altın Görünüş\n"
-            "💎 Elmas Görünüş\n"
-        ),
+        description="Kategori seç:",
         color=discord.Color.dark_blue()
     )
 
-
-# ------------------- ANA MENÜ -------------------
+# =====================================================
+# ANA MENÜ
+# =====================================================
 
 class MarketMainView(discord.ui.View):
+
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="🎁 Kasa", style=discord.ButtonStyle.primary)
     async def kasa(self, interaction, button):
+
         await interaction.response.edit_message(
             embed=kasa_embed(),
             view=KasaView()
@@ -3103,114 +3132,195 @@ class MarketMainView(discord.ui.View):
 
     @discord.ui.button(label="🕶 Soygun", style=discord.ButtonStyle.danger)
     async def soygun(self, interaction, button):
+
         await interaction.response.edit_message(
             embed=soygun_embed(),
-            view=SoygunMarketView()
+            view=SoygunView()
         )
 
     @discord.ui.button(label="🎣 Ekonomi", style=discord.ButtonStyle.success)
     async def ekonomi(self, interaction, button):
+
         await interaction.response.edit_message(
-            embed=ekonomi_market_embed(),
-            view=EkonomiMarketView()
+            embed=ekonomi_embed(),
+            view=EkonomiView()
         )
 
     @discord.ui.button(label="👑 Gösteriş", style=discord.ButtonStyle.secondary)
     async def gosteris(self, interaction, button):
+
         await interaction.response.edit_message(
             embed=gosteris_embed(),
             view=GosterisView()
         )
 
-
-# ------------------- EMBEDLER -------------------
+# =====================================================
+# EMBEDLER
+# =====================================================
 
 def kasa_embed():
     return discord.Embed(
-        title="🎁 Kasa Kategorisi",
-        description=(
-            "Bronz Kasa - 500\n"
-            "Gümüş Kasa - 2000\n"
-            "Altın Kasa - 5000\n"
-            "Elmas Kasa - 15000\n"
-            "Premium Kasa - 30000\n"
-            "EwoPlus Kasa - 60000"
-        ),
+        title="🎁 Kasa Marketi",
+        description=
+        "Bronz Kasa - 500\n"
+        "Gümüş Kasa - 2000\n"
+        "Altın Kasa - 5000\n"
+        "Elmas Kasa - 15000\n"
+        "Premium Kasa - 30000\n"
+        "EwoPlus Kasa - 60000",
         color=discord.Color.gold()
     )
 
-
 def soygun_embed():
     return discord.Embed(
-        title="🕶 Soygun Ürünleri",
-        description=(
-            "Silah - 15000\n"
-            "Özel Koruma - 20000\n"
-            "Özel Araçgereçler - 750000"
-        ),
+        title="🕶 Soygun Marketi",
+        description=
+        "Silah - 15000\n"
+        "Özel Koruma - 20000\n"
+        "Özel Araçgereçler - 750000",
         color=discord.Color.red()
     )
 
-
-def ekonomi_market_embed():
+def ekonomi_embed():
     return discord.Embed(
-        title="🎣 Ekonomi Ürünleri",
-        description="Olta - 1000\nYüzük - 75000",
-        color=discord.Color.blue()
+        title="🎣 Ekonomi Marketi",
+        description=
+        "Olta - 1000\n"
+        "Yüzük - 75000",
+        color=discord.Color.green()
     )
-
 
 def gosteris_embed():
     return discord.Embed(
-        title="👑 Gösteriş Ürünleri",
-        description=(
-            "Bronz Görünüş - 500000\n"
-            "Gümüş Görünüş - 2000000\n"
-            "Altın Görünüş - 5000000\n"
-            "Elmas Görünüş - 15000000"
-        ),
+        title="👑 Gösteriş Marketi",
+        description=
+        "Bronz Görünüş - 500000\n"
+        "Gümüş Görünüş - 2000000\n"
+        "Altın Görünüş - 5000000\n"
+        "Elmas Görünüş - 15000000",
         color=discord.Color.purple()
     )
 
+# =====================================================
+# VIEWLER
+# =====================================================
 
-# ------------------- GÖSTERİŞ VIEW -------------------
+class KasaView(discord.ui.View):
 
-class GosterisView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Bronz Görünüş", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Bronz Kasa", style=discord.ButtonStyle.primary)
     async def bronz(self, interaction, button):
-        await satin_al(interaction, "Bronz Görünüş")
+        await satin_al(interaction,"Bronz Kasa")
 
-    @discord.ui.button(label="Gümüş Görünüş", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Gümüş Kasa", style=discord.ButtonStyle.primary)
     async def gumus(self, interaction, button):
-        await satin_al(interaction, "Gümüş Görünüş")
+        await satin_al(interaction,"Gümüş Kasa")
 
-    @discord.ui.button(label="Altın Görünüş", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Altın Kasa", style=discord.ButtonStyle.primary)
     async def altin(self, interaction, button):
-        await satin_al(interaction, "Altın Görünüş")
+        await satin_al(interaction,"Altın Kasa")
 
-    @discord.ui.button(label="Elmas Görünüş", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Elmas Kasa", style=discord.ButtonStyle.primary)
     async def elmas(self, interaction, button):
-        await satin_al(interaction, "Elmas Görünüş")
+        await satin_al(interaction,"Elmas Kasa")
 
     @discord.ui.button(label="⬅️ Geri", style=discord.ButtonStyle.grey)
     async def geri(self, interaction, button):
+
         await interaction.response.edit_message(
             embed=market_ana_embed(),
             view=MarketMainView()
         )
 
+class SoygunView(discord.ui.View):
 
-# ------------------- SATIN AL -------------------
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Silah", style=discord.ButtonStyle.danger)
+    async def silah(self, interaction, button):
+        await satin_al(interaction,"Silah")
+
+    @discord.ui.button(label="Özel Koruma", style=discord.ButtonStyle.danger)
+    async def koruma(self, interaction, button):
+        await satin_al(interaction,"Özel Koruma")
+
+    @discord.ui.button(label="Özel Araçgereçler", style=discord.ButtonStyle.danger)
+    async def arac(self, interaction, button):
+        await satin_al(interaction,"Özel Araçgereçler")
+
+    @discord.ui.button(label="⬅️ Geri", style=discord.ButtonStyle.grey)
+    async def geri(self, interaction, button):
+
+        await interaction.response.edit_message(
+            embed=market_ana_embed(),
+            view=MarketMainView()
+        )
+
+class EkonomiView(discord.ui.View):
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Olta", style=discord.ButtonStyle.success)
+    async def olta(self, interaction, button):
+        await satin_al(interaction,"Olta")
+
+    @discord.ui.button(label="Yüzük", style=discord.ButtonStyle.success)
+    async def yuzuk(self, interaction, button):
+        await satin_al(interaction,"Yüzük")
+
+    @discord.ui.button(label="⬅️ Geri", style=discord.ButtonStyle.grey)
+    async def geri(self, interaction, button):
+
+        await interaction.response.edit_message(
+            embed=market_ana_embed(),
+            view=MarketMainView()
+        )
+
+class GosterisView(discord.ui.View):
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Bronz Görünüş", style=discord.ButtonStyle.secondary)
+    async def bronz(self, interaction, button):
+        await satin_al(interaction,"Bronz Görünüş")
+
+    @discord.ui.button(label="Gümüş Görünüş", style=discord.ButtonStyle.secondary)
+    async def gumus(self, interaction, button):
+        await satin_al(interaction,"Gümüş Görünüş")
+
+    @discord.ui.button(label="Altın Görünüş", style=discord.ButtonStyle.secondary)
+    async def altin(self, interaction, button):
+        await satin_al(interaction,"Altın Görünüş")
+
+    @discord.ui.button(label="Elmas Görünüş", style=discord.ButtonStyle.secondary)
+    async def elmas(self, interaction, button):
+        await satin_al(interaction,"Elmas Görünüş")
+
+    @discord.ui.button(label="⬅️ Geri", style=discord.ButtonStyle.grey)
+    async def geri(self, interaction, button):
+
+        await interaction.response.edit_message(
+            embed=market_ana_embed(),
+            view=MarketMainView()
+        )
+
+# =====================================================
+# SATIN AL
+# =====================================================
 
 async def satin_al(interaction, urun):
 
     user = get_user(interaction.user.id)
+
     fiyat = MARKET_URUNLERI[urun]["fiyat"]
 
     if user["para"] < fiyat:
+
         return await interaction.response.send_message(
             "❌ Paran yetmiyor.",
             ephemeral=True
@@ -3219,9 +3329,9 @@ async def satin_al(interaction, urun):
     collection.update_one(
         {"_id": str(interaction.user.id)},
         {
-            "$inc": {
-                "para": -fiyat,
-                f"envanter.{urun}": 1
+            "$inc":{
+                "para":-fiyat,
+                f"envanter.{urun}":1
             }
         }
     )
