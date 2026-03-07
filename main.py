@@ -3573,7 +3573,7 @@ async def işletmeler(ctx):
     )
 
     embed.add_field(
-        name="🧪 Teknolojiparkı",
+        name="🧪 Teknolojiparki",
         value="💰 Fiyat: 35.000.000\n📈 Saatlik: 275.000\n🔼 Yükseltme: Fiyat x %40 x Level",
         inline=False
     )
@@ -3663,48 +3663,25 @@ async def işletmeal(ctx, isim: str, miktar: int = 1):
         return await ctx.send("❌ Geçersiz işletme.")
 
     if miktar <= 0:
-        return await ctx.send("❌ Miktar 1 veya büyük olmalı.")
+        return await ctx.send("❌ Miktar 1 veya daha büyük olmalı.")
 
     mevcut = user.get("isletmeler", {}).get(isim, {}).get("adet", 0)
 
     if mevcut + miktar > 10:
         return await ctx.send("❌ Bir işletmeden en fazla **10 tane** alabilirsin.")
 
-    # HOLDİNG ÖZEL FİYAT
-    if isim == "holding":
+    temel_fiyat = ISLETMELER[isim]["fiyat"]
 
-        if mevcut == 0:
-            fiyat = 14000000
-        else:
-            fiyat = 20000000 + (mevcut - 1) * 5000000
+    toplam_fiyat = 0
 
-        if user["para"] < fiyat:
-            return await ctx.send(f"❌ {formatla(fiyat)} gerekli.")
+    # fiyat artış sistemi
+    for i in range(miktar):
 
-        sonraki = 20000000 + mevcut * 5000000
-
-        collection.update_one(
-            {"_id": str(ctx.author.id)},
-            {
-                "$inc": {
-                    "para": -fiyat,
-                    f"isletmeler.{isim}.adet": 1
-                },
-                "$set": {f"isletmeler.{isim}.level": 1}
-            }
-        )
-
-        return await ctx.send(
-            f"👑 **{mevcut+1}. Holding alındı!**\n"
-            f"💰 Ödenen: {formatla(fiyat)}\n"
-            f"📈 Sonraki fiyat: {formatla(sonraki)}"
-        )
-
-    fiyat = ISLETMELER[isim]["fiyat"]
-    toplam_fiyat = fiyat * miktar
+        fiyat = int(temel_fiyat * (1 + (mevcut + i) * 0.40))
+        toplam_fiyat += fiyat
 
     if user["para"] < toplam_fiyat:
-        return await ctx.send(f"❌ {formatla(toplam_fiyat)} gerekli.")
+        return await ctx.send(f"❌ Gerekli para: **{formatla(toplam_fiyat)}**")
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
@@ -3713,15 +3690,44 @@ async def işletmeal(ctx, isim: str, miktar: int = 1):
                 "para": -toplam_fiyat,
                 f"isletmeler.{isim}.adet": miktar
             },
-            "$set": {f"isletmeler.{isim}.level": 1}
+            "$set": {
+                f"isletmeler.{isim}.level": 1
+            }
         }
     )
 
-    await ctx.send(
-        f"🏭 **{isim.capitalize()} satın alındı!**\n"
-        f"📦 Alınan: {miktar}\n"
-        f"💰 Ödenen: {formatla(toplam_fiyat)}"
+    sonraki_fiyat = int(temel_fiyat * (1 + (mevcut + miktar) * 0.40))
+
+    embed = discord.Embed(
+        title="🏭 İşletme Satın Alındı",
+        color=discord.Color.green()
     )
+
+    embed.add_field(
+        name="🏭 İşletme",
+        value=isim.capitalize(),
+        inline=True
+    )
+
+    embed.add_field(
+        name="📦 Alınan",
+        value=f"{miktar} adet",
+        inline=True
+    )
+
+    embed.add_field(
+        name="💰 Ödenen",
+        value=formatla(toplam_fiyat),
+        inline=False
+    )
+
+    embed.add_field(
+        name="📈 Sonraki Fiyat",
+        value=formatla(sonraki_fiyat),
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
 
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
@@ -4522,7 +4528,7 @@ async def vergi_sistemi():
 
 @bot.command()
 @commands.cooldown(1, 750, commands.BucketType.user)
-async def baskın(ctx, member: discord.Member, isletme):
+async def baskın(ctx, member: discord.Member, *, isletme: str):
 
     if member.bot or member == ctx.author:
         ctx.command.reset_cooldown(ctx)
@@ -4531,13 +4537,32 @@ async def baskın(ctx, member: discord.Member, isletme):
     user = get_user(ctx.author.id)
     hedef = get_user(member.id)
 
-    if user["envanter"].get("Özel Araçgereçler",0) <= 0:
+    isletme = isletme.lower()
+
+    # özel araç kontrol
+    if user["envanter"].get("Özel Araçgereçler", 0) <= 0:
         ctx.command.reset_cooldown(ctx)
         return await ctx.send("❌ Baskın için **Özel Araçgereçler** lazım!")
 
-    if isletme not in hedef.get("isletmeler", {}):
+    # 200k para kontrol
+    baskin_ucreti = 200000
+
+    if user["para"] < baskin_ucreti:
+        ctx.command.reset_cooldown(ctx)
+        return await ctx.send("❌ Baskın yapmak için en az **200.000** paran olmalı!")
+
+    # işletme kontrol
+    hedef_isletmeler = hedef.get("isletmeler", {})
+
+    if isletme not in hedef_isletmeler:
         ctx.command.reset_cooldown(ctx)
         return await ctx.send("❌ Bu kişinin böyle bir işletmesi yok!")
+
+    # baskın ücreti düş
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": -baskin_ucreti}}
+    )
 
     basari = 0.45
 
@@ -4546,6 +4571,14 @@ async def baskın(ctx, member: discord.Member, isletme):
     if random.random() < basari:
 
         calinan = int(gelir * 0.40)
+
+        hedef_para = hedef.get("para", 0)
+
+        if calinan > hedef_para:
+            calinan = hedef_para
+
+        if calinan <= 0:
+            return await ctx.send("❌ Hedefte çalacak para yok.")
 
         collection.update_one(
             {"_id": str(member.id)},
@@ -4557,19 +4590,22 @@ async def baskın(ctx, member: discord.Member, isletme):
             {"$inc": {"para": calinan}}
         )
 
-        mesaj = f"🚨 Baskın başarılı! {formatla(calinan)} EwoCoin çaldın!"
+        mesaj = (
+            f"🚨 **Baskın Başarılı!**\n\n"
+            f"🏭 Hedef: {isletme.capitalize()}\n"
+            f"💰 Çalınan Para: **{formatla(calinan)}**"
+        )
 
     else:
 
         ceza = 200000
 
-        collection.update_one(
-            {"_id": str(ctx.author.id)},
-            {"$inc": {"para": -ceza}}
+        mesaj = (
+            f"👮 **Polis seni yakaladı!**\n\n"
+            f"💸 Ceza: **{formatla(ceza)}**"
         )
 
-        mesaj = f"👮 Polis seni yakaladı! {formatla(ceza)} ceza."
-
+    # araç düş
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"envanter.Özel Araçgereçler": -1}}
