@@ -867,10 +867,6 @@ async def bankayatır(ctx, miktar: int):
 
     await ctx.send(f"🏦 {ctx.author.mention}, bankaya {formatla(miktar)} EwoCoin yatırdınız")
 
-# YARDIM SİSTEMİ
-
-from discord.ui import View, Button
-
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def yardım(ctx):
@@ -947,7 +943,6 @@ q!rank → Düello rankınızı gösterir
 q!gdüellocular → En fazla WİN'e sahip 10 kişiyi sıralar
 q!sdüellocular → Sunucuda En fazla WİN'e sahip 10 kişiyi sıralar
 q!baskın → Başka kullanıcının İşletme gelirini soyar
-
 q!soygun → Başka kullanıcıyı soygun yap
 q!enflasyon → Toplam EwoCoin miktarı
 q!kasaaç <Kasaadi> → Kasa açar
@@ -965,7 +960,6 @@ q!davet → Botu sunucuna ekle
         color=discord.Color.blurple()
     )
 
-    # 🔥 YENİ EKLENEN EMBED
     yetkili_embed = discord.Embed(
         title="🛠️ Moderasyon Komutları (Botu Sunucusuna ekleyen yöneticiler için)",
         description="""
@@ -977,7 +971,36 @@ q!prefixsifirla → Prefixi varsayılana döndürür
         color=discord.Color.orange()
     )
 
-    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, diger_embed, yetkili_embed]:
+    mafia_embed = discord.Embed(
+        title="🕶️ Mafya Komutları",
+        description="""
+q!mafyakur <Mafyaismi>
+Mafya kurmanızı sağlar 1M EwoCoin ve 5+ Level hesap gerekir
+q!mafyabilgi
+Bulunduğunuz mafya grubu hakkında bilgi verir
+q!mafyadavet
+Mafya liderleri diğer üyeleri kendi gruplarına davet eder
+q!mafyakabul
+Davet edilen üye daveti kabul eder
+q!mafyam
+Mafyan hakkında bilgi verir mafyanı buradan yükseltebilirsin
+q!mafya ayrıl
+Bulunduğun mafyadan çıkarsın. Lider yazarsa bot rastgele yeni lider seçer
+q!mafyayatır <miktar>
+Mafya kasasına para yatırır
+q!mafyaçek <miktar>
+Mafya kasasından para çeker (sadece lider)
+q!gmafyalar
+Tüm sunuculardaki en iyi 10 mafya
+q!smafyalar
+Sunucudaki en iyi 10 mafya
+q!mafyabaskın <mafyagrupismi>
+Başka mafyanın kasasını soymaya çalışır
+""",
+        color=discord.Color.black()
+    )
+
+    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, diger_embed, yetkili_embed, mafia_embed]:
         e.set_footer(text="EwoBot Yardım Menüsü")
 
     view = View(timeout=None)
@@ -989,6 +1012,7 @@ q!prefixsifirla → Prefixi varsayılana döndürür
     isletme_button = Button(label="🏭 İşletmeler", style=discord.ButtonStyle.green)
     diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
     yetkili_button = Button(label="🛠️ Sunucu Moderasyon", style=discord.ButtonStyle.danger)
+    mafia_button = Button(label="🕶️ Mafya", style=discord.ButtonStyle.gray)
 
     async def ekonomi_callback(interaction):
         await interaction.response.edit_message(embed=ekonomi_embed, view=view)
@@ -1011,6 +1035,9 @@ q!prefixsifirla → Prefixi varsayılana döndürür
     async def yetkili_callback(interaction):
         await interaction.response.edit_message(embed=yetkili_embed, view=view)
 
+    async def mafia_callback(interaction):
+        await interaction.response.edit_message(embed=mafia_embed, view=view)
+
     ekonomi_button.callback = ekonomi_callback
     kumar_button.callback = kumar_callback
     banka_button.callback = banka_callback
@@ -1018,6 +1045,7 @@ q!prefixsifirla → Prefixi varsayılana döndürür
     isletme_button.callback = isletme_callback
     diger_button.callback = diger_callback
     yetkili_button.callback = yetkili_callback
+    mafia_button.callback = mafia_callback
 
     view.add_item(ekonomi_button)
     view.add_item(kumar_button)
@@ -1026,6 +1054,7 @@ q!prefixsifirla → Prefixi varsayılana döndürür
     view.add_item(isletme_button)
     view.add_item(diger_button)
     view.add_item(yetkili_button)
+    view.add_item(mafia_button)
 
     await ctx.send(embed=ekonomi_embed, view=view)
 
@@ -4757,6 +4786,7 @@ async def baskın(ctx, member: discord.Member, *, isletme: str):
     await ctx.send(mesaj)
 
 @bot.command(name="mafyakur")
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def mafyakur(ctx, isim: str):
 
     user_id = str(ctx.author.id)
@@ -4815,6 +4845,7 @@ async def mafyakur(ctx, isim: str):
 # =========================
 
 @bot.command(name="mafyabilgi")
+@commands.cooldown(1, 5, commands.BucketType.user)
 async def mafya_bilgi(ctx):
 
     user_id = str(ctx.author.id)
@@ -4854,6 +4885,7 @@ async def mafya_bilgi(ctx):
 # =========================
 
 @bot.command()
+@commands.cooldown(1, 5, commands.BucketType.user)
 async def mafyadavet(ctx, member: discord.Member):
 
     user_id = str(ctx.author.id)
@@ -4880,6 +4912,7 @@ async def mafyadavet(ctx, member: discord.Member):
 # =========================
 
 @bot.command()
+@commands.cooldown(1, 5, commands.BucketType.user)
 async def mafyakabul(ctx):
 
     user_id = str(ctx.author.id)
@@ -4914,6 +4947,7 @@ async def mafyakabul(ctx):
     await ctx.send(f"✅ {mafia['name']} mafyasına katıldın.")
 
 @bot.command()
+@commands.cooldown(1, 5, commands.BucketType.user)
 async def mafyaayrıl(ctx):
 
     user_id = str(ctx.author.id)
@@ -4961,6 +4995,7 @@ async def mafyaayrıl(ctx):
     await ctx.send("🚪 Mafyadan ayrıldın.")
 
 @bot.command()
+@commands.cooldown(1, 5, commands.BucketType.user)
 async def mafyayatır(ctx, miktar: int):
 
     user_id = str(ctx.author.id)
@@ -4985,6 +5020,7 @@ async def mafyayatır(ctx, miktar: int):
     await ctx.send(f"💰 Mafya kasasına {miktar:,} yatırıldı.")
 
 @bot.command()
+@commands.cooldown(1, 5, commands.BucketType.user)
 async def mafyacek(ctx, miktar: int):
 
     user_id = str(ctx.author.id)
@@ -5030,6 +5066,7 @@ def mafia_power(mafia):
 # =========================
 
 @bot.command()
+@commands.cooldown(1, 450, commands.BucketType.user)
 async def mafyabaskın(ctx, isim):
 
     user = get_user(ctx.author.id)
@@ -5094,6 +5131,7 @@ async def mafyabaskın(ctx, isim):
 # =========================
 
 @bot.command()
+@commands.cooldown(1, 20, commands.BucketType.user)
 async def smafyalar(ctx):
 
     mafias = mafia_col.find({"guild": ctx.guild.id}).sort("bank",-1).limit(10)
@@ -5118,6 +5156,7 @@ async def smafyalar(ctx):
 # =========================
 
 @bot.command()
+@commands.cooldown(1, 20, commands.BucketType.user)
 async def gmafyalar(ctx):
 
     mafias = mafia_col.find().sort("bank",-1).limit(10)
@@ -5178,6 +5217,7 @@ async def mafia_board():
         mafia_msg = await channel.send(embed=embed)
 
 @bot.command()
+@commands.cooldown(1, 10, commands.BucketType.user)
 async def mafyam(ctx):
 
     user = get_user(ctx.author.id)
@@ -5283,6 +5323,7 @@ class MafiaUpgradeView(discord.ui.View):
         )
 
 @bot.command()
+@commands.cooldown(1, 2, commands.BucketType.user)
 async def mafyasil(ctx, *, isim):
 
     if ctx.author.id != 1271933410251772017:
