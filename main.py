@@ -962,6 +962,36 @@ q!davet → Botu sunucuna ekle
         color=discord.Color.blurple()
     )
 
+    mafia_embed = discord.Embed(
+        title="🕶️ Mafya Komutları",
+        description="""
+q!mafyakur <Mafyaismi>
+Mafya kurmanızı sağlar (1M EwoCoin ve 5+ Level gerekir)
+q!mafyabilgi
+Bulunduğun mafya hakkında bilgi verir
+q!mafyadavet
+Mafya lideri oyuncu davet eder
+q!mafyakabul
+Mafya davetini kabul edersin
+q!mafyam
+Mafyan hakkında bilgi verir ve yükseltme yaparsın
+q!mafyaayrıl
+Mafyadan ayrılırsın (lider ayrılırsa rastgele lider seçilir)
+q!mafyayatır <miktar>
+Mafya kasasına para yatırır
+q!mafyacek <miktar>
+Mafya kasasından para çeker (lider)
+q!gmafyalar
+Global en iyi mafyalar
+q!smafyalar
+Sunucudaki en iyi mafyalar
+q!mafyabaskın <mafya>
+Başka mafyanın kasasını soymaya çalışır
+""",
+        color=discord.Color.dark_gray()
+   )
+
+    # 🔥 YENİ EKLENEN EMBED
     yetkili_embed = discord.Embed(
         title="🛠️ Moderasyon Komutları (Botu Sunucusuna ekleyen yöneticiler için)",
         description="""
@@ -971,35 +1001,6 @@ q!prefix <yeni> → Sunucu prefixini değiştirir
 q!prefixsifirla → Prefixi varsayılana döndürür
 """,
         color=discord.Color.orange()
-    )
-
-    mafia_embed = discord.Embed(
-        title="🕶️ Mafya Komutları",
-        description="""
-q!mafyakur <Mafyaismi>
-Mafya kurmanızı sağlar 1M EwoCoin ve 5+ Level hesap gerekir
-q!mafyabilgi
-Bulunduğunuz mafya grubu hakkında bilgi verir
-q!mafyadavet
-Mafya liderleri diğer üyeleri kendi gruplarına davet eder
-q!mafyakabul
-Davet edilen üye daveti kabul eder
-q!mafyam
-Mafyan hakkında bilgi verir mafyanı buradan yükseltebilirsin
-q!mafya ayrıl
-Bulunduğun mafyadan çıkarsın. Lider yazarsa bot rastgele yeni lider seçer
-q!mafyayatır <miktar>
-Mafya kasasına para yatırır
-q!mafyaçek <miktar>
-Mafya kasasından para çeker (sadece lider)
-q!gmafyalar
-Tüm sunuculardaki en iyi 10 mafya
-q!smafyalar
-Sunucudaki en iyi 10 mafya
-q!mafyabaskın <mafyagrupismi>
-Başka mafyanın kasasını soymaya çalışır
-""",
-        color=discord.Color.black()
     )
 
     for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, diger_embed, yetkili_embed, mafia_embed]:
@@ -1013,8 +1014,8 @@ Başka mafyanın kasasını soymaya çalışır
     meslek_button = Button(label="💼 Meslek", style=discord.ButtonStyle.gray)
     isletme_button = Button(label="🏭 İşletmeler", style=discord.ButtonStyle.green)
     diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
+    mafia_button = Button(label="🕶️ Mafya", style=discord.ButtonStyle.secondary)
     yetkili_button = Button(label="🛠️ Sunucu Moderasyon", style=discord.ButtonStyle.danger)
-    mafia_button = Button(label="🕶️ Mafya", style=discord.ButtonStyle.gray)
 
     async def ekonomi_callback(interaction):
         await interaction.response.edit_message(embed=ekonomi_embed, view=view)
@@ -1034,11 +1035,11 @@ Başka mafyanın kasasını soymaya çalışır
     async def diger_callback(interaction):
         await interaction.response.edit_message(embed=diger_embed, view=view)
 
-    async def yetkili_callback(interaction):
-        await interaction.response.edit_message(embed=yetkili_embed, view=view)
-
     async def mafia_callback(interaction):
         await interaction.response.edit_message(embed=mafia_embed, view=view)
+
+    async def yetkili_callback(interaction):
+        await interaction.response.edit_message(embed=yetkili_embed, view=view)
 
     ekonomi_button.callback = ekonomi_callback
     kumar_button.callback = kumar_callback
@@ -1046,8 +1047,8 @@ Başka mafyanın kasasını soymaya çalışır
     meslek_button.callback = meslek_callback
     isletme_button.callback = isletme_callback
     diger_button.callback = diger_callback
-    yetkili_button.callback = yetkili_callback
     mafia_button.callback = mafia_callback
+    yetkili_button.callback = yetkili_callback
 
     view.add_item(ekonomi_button)
     view.add_item(kumar_button)
@@ -1055,8 +1056,8 @@ Başka mafyanın kasasını soymaya çalışır
     view.add_item(meslek_button)
     view.add_item(isletme_button)
     view.add_item(diger_button)
-    view.add_item(yetkili_button)
     view.add_item(mafia_button)
+    view.add_item(yetkili_button)
 
     await ctx.send(embed=ekonomi_embed, view=view)
 
@@ -2260,62 +2261,45 @@ import asyncio
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def önemliduyuru(ctx, *, mesaj):
+
     if ctx.author.id != 1271933410251772017:
         return
 
-    baslangic_zaman = time.time()
-    toplam_sunucu = len(bot.guilds)
+    baslangic = time.time()
+
+    # MongoDB'den kullanıcıları al
+    tum_kullanicilar = []
+    for user in collection.find({}, {"_id": 1}):
+        tum_kullanicilar.append(int(user["_id"]))
+
+    toplam_kullanici = len(tum_kullanicilar)
 
     duyuru_embed = discord.Embed(
         title="🚨 EwoBot Önemli Duyuru",
         description=mesaj,
         color=discord.Color.dark_blue()
     )
+
     duyuru_embed.set_thumbnail(url=bot.user.avatar.url)
     duyuru_embed.set_footer(text="EwoBot Yönetimi | Önemli Bildirim")
 
     ilerleme_embed = discord.Embed(
-        title="📡 Önemli Duyuru Gönderilmeye Başladı...",
+        title="📡 Duyuru Gönderiliyor...",
         description=(
-            f"🌍 Gezilen Sunucu: **0 / {toplam_sunucu}**\n"
-            f"👥 Toplam Kullanıcı: **0**\n"
+            f"👥 Toplam Kullanıcı: **{toplam_kullanici}**\n"
             f"📨 Başarılı DM: **0**\n"
-            f"❌ Başarısız DM: **0**\n"
-            f"⏳ Tahmini Kalan Süre: Hesaplanıyor..."
+            f"❌ Başarısız DM: **0**"
         ),
         color=discord.Color.dark_blue()
     )
-    ilerleme_embed.set_thumbnail(url=bot.user.avatar.url)
 
     mesaj_obj = await ctx.send(embed=ilerleme_embed)
 
-    tum_kullanicilar = set()
-    gezilen_sunucu = 0
-
-    # Sunucuları gez ve kullanıcıları topla
-    for guild in bot.guilds:
-        gezilen_sunucu += 1
-
-        for member in guild.members:
-            if not member.bot:
-                tum_kullanicilar.add(member.id)
-
-        ilerleme_embed.description = (
-            f"🌍 Gezilen Sunucu: **{gezilen_sunucu} / {toplam_sunucu}**\n"
-            f"👥 Toplam Kullanıcı (Benzersiz): **{len(tum_kullanicilar)}**\n"
-            f"📨 Başarılı DM: **0**\n"
-            f"❌ Başarısız DM: **0**\n"
-            f"⏳ Tahmini Kalan Süre: Hesaplanıyor..."
-        )
-
-        await mesaj_obj.edit(embed=ilerleme_embed)
-
-    toplam_kullanici = len(tum_kullanicilar)
     basarili = 0
     basarisiz = 0
 
-    # DM gönderme
     for index, user_id in enumerate(tum_kullanicilar, start=1):
+
         try:
             uye = await bot.fetch_user(user_id)
             await uye.send(embed=duyuru_embed)
@@ -2323,31 +2307,27 @@ async def önemliduyuru(ctx, *, mesaj):
         except:
             basarisiz += 1
 
-        # Tahmini süre hesaplama
-        gecen_sure = time.time() - baslangic_zaman
-        ortalama_sure = gecen_sure / index
-        kalan_kisi = toplam_kullanici - index
-        tahmini_kalan = int(ortalama_sure * kalan_kisi)
+        # Rate limit koruması
+        await asyncio.sleep(1)
 
-        if index % 5 == 0 or index == toplam_kullanici:
+        # Her 10 kişide bir ilerleme güncelle
+        if index % 10 == 0 or index == toplam_kullanici:
+
             ilerleme_embed.description = (
-                f"🌍 Gezilen Sunucu: **{toplam_sunucu} / {toplam_sunucu}**\n"
                 f"👥 Toplam Kullanıcı: **{toplam_kullanici}**\n"
                 f"📨 Başarılı DM: **{basarili}**\n"
                 f"❌ Başarısız DM: **{basarisiz}**\n"
-                f"⏳ Tahmini Kalan Süre: **{tahmini_kalan} saniye**"
+                f"📊 Gönderilen: **{index}/{toplam_kullanici}**"
             )
 
             await mesaj_obj.edit(embed=ilerleme_embed)
-            await asyncio.sleep(0.4)
 
-    toplam_sure = int(time.time() - baslangic_zaman)
+    toplam_sure = int(time.time() - baslangic)
 
     final_embed = discord.Embed(
-        title="📊 Önemli Duyuru Tamamlandı",
+        title="📊 Duyuru Tamamlandı",
         description=(
-            f"🌍 Toplam Sunucu: **{toplam_sunucu}**\n"
-            f"👥 Toplam Benzersiz Kullanıcı: **{toplam_kullanici}**\n\n"
+            f"👥 Toplam Kullanıcı: **{toplam_kullanici}**\n\n"
             f"📨 Başarılı DM: **{basarili}**\n"
             f"❌ Başarısız DM: **{basarisiz}**\n\n"
             f"⏱ Toplam Süre: **{toplam_sure} saniye**"
@@ -2356,7 +2336,6 @@ async def önemliduyuru(ctx, *, mesaj):
     )
 
     final_embed.set_thumbnail(url=bot.user.avatar.url)
-    final_embed.set_footer(text="EwoBot Yönetimi | Yayın Sistemi")
 
     await mesaj_obj.edit(embed=final_embed)
 
