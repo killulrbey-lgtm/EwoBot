@@ -4522,21 +4522,30 @@ async def komutaç(ctx):
 
     await ctx.send("🔓 Bu kanalda bot komutları tekrar açıldı.")
 
-@tasks.loop(hours=24)
+@tasks.loop(hours=1)
 async def vergi_sistemi():
+
+    simdi = int(time.time())
 
     users = collection.find()
 
     for user in users:
 
-        nakit = user.get("para", 0)
-        banka = user.get("banka", 0)
+        son_vergi = user.get("son_vergi_zamani", 0)
+
+        # 24 saat geçmemişse vergi alma
+        if simdi - son_vergi < 86400:
+            continue
+
+        nakit = int(user.get("para", 0))
+        banka = int(user.get("banka", 0))
+        isletmeler = user.get("isletmeler", {})
 
         isletme_degeri = 0
 
-        for isim, data in user.get("isletmeler", {}).items():
+        for isim, data in isletmeler.items():
 
-            adet = data.get("adet", 0)
+            adet = int(data.get("adet", 0))
 
             if isim in ISLETMELER:
                 fiyat = ISLETMELER[isim]["fiyat"]
@@ -4547,14 +4556,103 @@ async def vergi_sistemi():
 
         servet = nakit + banka + isletme_degeri
 
-        if servet >= 5000000:
+        if servet < 5000000:
+            continue
 
-            vergi = int(servet * 0.05)
+        vergi = int(servet * 0.02)
+
+        kesilen = 0
+        yeni_isletmeler = isletmeler.copy()
+
+        # 1️⃣ Nakitten kes
+        if nakit >= vergi:
+
+            kesilen = vergi
 
             collection.update_one(
                 {"_id": user["_id"]},
-                {"$inc": {"para": -vergi}}
+                {
+                    "$inc": {"para": -vergi},
+                    "$set": {"son_vergi_zamani": simdi}
+                }
             )
+
+        else:
+
+            toplam_para = nakit + banka
+
+            # 2️⃣ Bankadan kes
+            if toplam_para >= vergi:
+
+                kalan = vergi - nakit
+                kesilen = vergi
+
+                collection.update_one(
+                    {"_id": user["_id"]},
+                    {
+                        "$set": {
+                            "para": 0,
+                            "son_vergi_zamani": simdi
+                        },
+                        "$inc": {"banka": -kalan}
+                    }
+                )
+
+            else:
+
+                # 3️⃣ İşletme sil
+                eksik = vergi - toplam_para
+                kesilen = vergi
+
+                for isim in list(yeni_isletmeler.keys()):
+
+                    adet = yeni_isletmeler[isim].get("adet", 0)
+
+                    if isim not in ISLETMELER:
+                        continue
+
+                    fiyat = ISLETMELER[isim]["fiyat"]
+
+                    while adet > 0 and eksik > 0:
+
+                        adet -= 1
+                        eksik -= fiyat
+
+                    if adet <= 0:
+                        del yeni_isletmeler[isim]
+                    else:
+                        yeni_isletmeler[isim]["adet"] = adet
+
+                    if eksik <= 0:
+                        break
+
+                collection.update_one(
+                    {"_id": user["_id"]},
+                    {
+                        "$set": {
+                            "para": 0,
+                            "banka": 0,
+                            "isletmeler": yeni_isletmeler,
+                            "son_vergi_zamani": simdi
+                        }
+                    }
+                )
+
+        # 📩 DM gönder
+        try:
+
+            kullanici = await bot.fetch_user(int(user["_id"]))
+
+            await kullanici.send(
+                f"🏦 **EwoBot Vergi Sistemi**\n\n"
+                f"💰 Kesilen Vergi: {formatla(kesilen)}\n"
+                f"📊 Toplam Servet: {formatla(servet)}\n"
+                f"📉 Vergi Oranı: %2\n\n"
+                f"⚠️ Vergi otomatik olarak kesildi."
+            )
+
+        except:
+            pass
 
 @bot.command()
 @commands.cooldown(1, 750, commands.BucketType.user)
