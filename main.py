@@ -5205,9 +5205,9 @@ async def on_ready():
         try:
             if not loop.is_running():
                 loop.start()
-                print(f"{loop.__name__} başlatıldı.")
+                print(f"{loop.coro.__name__} başlatıldı.")
         except Exception as e:
-            print(f"{loop.__name__} başlatma hatası: {e}")
+            print(f"{loop.coro.__name__} başlatma hatası: {e}")
 
     print("Tüm sistemler başarıyla başlatıldı.")
 
