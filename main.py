@@ -10,6 +10,7 @@ from threading import Thread
 import pymongo
 from collections import defaultdict
 import uuid
+import time
 
 # ================= MONGO =================
 
@@ -2259,20 +2260,41 @@ async def embedduyuru(ctx, kanal: discord.TextChannel, *, mesaj):
 import asyncio
 
 @bot.command()
-@commands.cooldown(1, 5, commands.BucketType.user)
 async def önemliduyuru(ctx, *, mesaj):
 
     if ctx.author.id != 1271933410251772017:
         return
 
+    tum_kullanicilar = [int(user["_id"]) for user in collection.find({}, {"_id": 1})]
+    toplam = len(tum_kullanicilar)
+
+    onay_embed = discord.Embed(
+        title="⚠️ Duyuru Onayı",
+        description=(
+            f"Bu duyuru **{toplam} kullanıcıya** gönderilecek.\n\n"
+            f"**Mesaj:**\n{mesaj}\n\n"
+            f"Devam etmek için **evet** yaz.\n"
+            f"İptal etmek için **hayır** yaz."
+        ),
+        color=discord.Color.orange()
+    )
+
+    await ctx.send(embed=onay_embed)
+
+    def check(m):
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    try:
+        cevap = await bot.wait_for("message", timeout=30, check=check)
+    except asyncio.TimeoutError:
+        await ctx.send("⏰ Süre doldu. Duyuru iptal edildi.")
+        return
+
+    if cevap.content.lower() != "evet":
+        await ctx.send("❌ Duyuru iptal edildi.")
+        return
+
     baslangic = time.time()
-
-    # MongoDB'den kullanıcıları al
-    tum_kullanicilar = []
-    for user in collection.find({}, {"_id": 1}):
-        tum_kullanicilar.append(int(user["_id"]))
-
-    toplam_kullanici = len(tum_kullanicilar)
 
     duyuru_embed = discord.Embed(
         title="🚨 EwoBot Önemli Duyuru",
@@ -2281,15 +2303,11 @@ async def önemliduyuru(ctx, *, mesaj):
     )
 
     duyuru_embed.set_thumbnail(url=bot.user.avatar.url)
-    duyuru_embed.set_footer(text="EwoBot Yönetimi | Önemli Bildirim")
+    duyuru_embed.set_footer(text="EwoBot Yönetimi")
 
     ilerleme_embed = discord.Embed(
         title="📡 Duyuru Gönderiliyor...",
-        description=(
-            f"👥 Toplam Kullanıcı: **{toplam_kullanici}**\n"
-            f"📨 Başarılı DM: **0**\n"
-            f"❌ Başarısız DM: **0**"
-        ),
+        description=f"👥 Toplam Kullanıcı: **{toplam}**\n📨 Başarılı: **0**\n❌ Başarısız: **0**",
         color=discord.Color.dark_blue()
     )
 
@@ -2298,26 +2316,32 @@ async def önemliduyuru(ctx, *, mesaj):
     basarili = 0
     basarisiz = 0
 
-    for index, user_id in enumerate(tum_kullanicilar, start=1):
+    semaphore = asyncio.Semaphore(10)
 
-        try:
-            uye = await bot.fetch_user(user_id)
-            await uye.send(embed=duyuru_embed)
-            basarili += 1
-        except:
-            basarisiz += 1
+    async def dm_gonder(user_id):
+        nonlocal basarili, basarisiz
 
-        # Rate limit koruması
-        await asyncio.sleep(1)
+        async with semaphore:
+            try:
+                uye = await bot.fetch_user(user_id)
+                await uye.send(embed=duyuru_embed)
+                basarili += 1
+            except:
+                basarisiz += 1
 
-        # Her 10 kişide bir ilerleme güncelle
-        if index % 10 == 0 or index == toplam_kullanici:
+    gorevler = [asyncio.create_task(dm_gonder(uid)) for uid in tum_kullanicilar]
+
+    for i, task in enumerate(asyncio.as_completed(gorevler), start=1):
+
+        await task
+
+        if i % 20 == 0 or i == toplam:
 
             ilerleme_embed.description = (
-                f"👥 Toplam Kullanıcı: **{toplam_kullanici}**\n"
-                f"📨 Başarılı DM: **{basarili}**\n"
-                f"❌ Başarısız DM: **{basarisiz}**\n"
-                f"📊 Gönderilen: **{index}/{toplam_kullanici}**"
+                f"👥 Toplam Kullanıcı: **{toplam}**\n"
+                f"📨 Başarılı: **{basarili}**\n"
+                f"❌ Başarısız: **{basarisiz}**\n"
+                f"📊 Gönderilen: **{i}/{toplam}**"
             )
 
             await mesaj_obj.edit(embed=ilerleme_embed)
@@ -2327,15 +2351,13 @@ async def önemliduyuru(ctx, *, mesaj):
     final_embed = discord.Embed(
         title="📊 Duyuru Tamamlandı",
         description=(
-            f"👥 Toplam Kullanıcı: **{toplam_kullanici}**\n\n"
-            f"📨 Başarılı DM: **{basarili}**\n"
-            f"❌ Başarısız DM: **{basarisiz}**\n\n"
-            f"⏱ Toplam Süre: **{toplam_sure} saniye**"
+            f"👥 Toplam Kullanıcı: **{toplam}**\n\n"
+            f"📨 Başarılı: **{basarili}**\n"
+            f"❌ Başarısız: **{basarisiz}**\n\n"
+            f"⏱ Süre: **{toplam_sure} saniye**"
         ),
         color=discord.Color.green()
     )
-
-    final_embed.set_thumbnail(url=bot.user.avatar.url)
 
     await mesaj_obj.edit(embed=final_embed)
 
@@ -3818,8 +3840,6 @@ async def işletmeyükselt(ctx, *, isim: str):
         f"Yeni Level: {level+1}\n"
         f"Ödenen: {formatla(maliyet)}"
     )
-
-import time
 
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
