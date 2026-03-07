@@ -2260,7 +2260,7 @@ async def embedduyuru(ctx, kanal: discord.TextChannel, *, mesaj):
 import asyncio
 
 @bot.command()
-async def önemliduyuru(ctx, *, mesaj):
+async def onemliduyuru(ctx, *, mesaj):
 
     if ctx.author.id != 1271933410251772017:
         return
