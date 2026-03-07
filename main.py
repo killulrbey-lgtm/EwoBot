@@ -5187,23 +5187,42 @@ async def mafyam(ctx):
 
     mafia = mafia_col.find_one({"_id": user["mafia_id"]})
 
+    if not mafia:
+        return await ctx.send("❌ Mafya bulunamadı.")
+
     embed = discord.Embed(
         title=f"🏴 {mafia['name']}",
         color=0x2f3136
     )
 
-    embed.add_field(name="👑 Lider", value=f"<@{mafia['leader']}>")
-    embed.add_field(name="👥 Üye", value=f"{len(mafia['members'])}/{mafia['capacity']}")
-    embed.add_field(name="💰 Kasa", value=f"{mafia['bank']:,}")
+    embed.add_field(
+        name="👑 Lider",
+        value=f"<@{mafia['leader']}>",
+        inline=False
+    )
+
+    embed.add_field(
+        name="👥 Üye",
+        value=f"{len(mafia['members'])}/{mafia['capacity']}",
+        inline=True
+    )
+
+    embed.add_field(
+        name="💰 Kasa",
+        value=f"{mafia.get('bank',0):,}",
+        inline=True
+    )
 
     view = None
 
-    if ctx.author.id == mafia["leader"]:
+    # sadece lider butonu görür
+    if str(ctx.author.id) == str(mafia["leader"]):
         view = MafiaUpgradeView()
 
     await ctx.send(embed=embed, view=view)
 
 class MafiaUpgradeView(discord.ui.View):
+
     def __init__(self):
         super().__init__(timeout=None)
 
@@ -5211,10 +5230,21 @@ class MafiaUpgradeView(discord.ui.View):
     async def upgrade(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         user = get_user(interaction.user.id)
+
+        if not user.get("mafia_id"):
+            return await interaction.response.send_message("❌ Mafyada değilsin.", ephemeral=True)
+
         mafia = mafia_col.find_one({"_id": user["mafia_id"]})
 
-        if interaction.user.id != mafia["leader"]:
-            return await interaction.response.send_message("❌ Sadece lider yükseltebilir.", ephemeral=True)
+        if not mafia:
+            return await interaction.response.send_message("❌ Mafya bulunamadı.", ephemeral=True)
+
+        # sadece lider yükseltebilir
+        if str(interaction.user.id) != str(mafia["leader"]):
+            return await interaction.response.send_message(
+                "❌ Sadece mafya lideri yükseltebilir.",
+                ephemeral=True
+            )
 
         levels = [
             (5, 7, 500000),
@@ -5223,14 +5253,17 @@ class MafiaUpgradeView(discord.ui.View):
             (15, 20, 5000000)
         ]
 
-        current = mafia["capacity"]
+        current_capacity = mafia["capacity"]
 
         for old, new, price in levels:
 
-            if current == old:
+            if current_capacity == old:
 
-                if mafia["bank"] < price:
-                    return await interaction.response.send_message(f"❌ Mafya kasasında {price:,} olmalı.", ephemeral=True)
+                if mafia.get("bank",0) < price:
+                    return await interaction.response.send_message(
+                        f"❌ Mafya kasasında **{price:,}** para olmalı.",
+                        ephemeral=True
+                    )
 
                 mafia_col.update_one(
                     {"_id": mafia["_id"]},
@@ -5241,10 +5274,13 @@ class MafiaUpgradeView(discord.ui.View):
                 )
 
                 return await interaction.response.send_message(
-                    f"🎉 Mafya kapasitesi **{new} kişi** oldu!\n💰 {price:,} ödendi."
+                    f"🎉 Mafya kapasitesi **{new} kişi** oldu!\n💰 **{price:,}** kasa parası kullanıldı."
                 )
 
-        await interaction.response.send_message("❌ Mafya zaten max seviyede.", ephemeral=True)
+        await interaction.response.send_message(
+            "❌ Mafya zaten maksimum seviyede.",
+            ephemeral=True
+        )
 
 @bot.command()
 async def mafyasil(ctx, *, isim):
@@ -5295,6 +5331,86 @@ async def duel_timeout_checker():
 
         except Exception as e:
             print(f"Duel timeout hatası ({duel_id}): {e}")
+
+@bot.command()
+async def sezonreset(ctx):
+
+    if ctx.author.id != 1271933410251772017:
+        return await ctx.send("❌ Bu komutu sadece bot sahibi kullanabilir.")
+
+    collection.update_many(
+        {},
+        {
+            "$set": {
+                "para": 2500,
+                "banka": 500,
+                "meslek": "İşsiz",
+                "xp": 0,
+                "level": 1,
+                "son_maas": 0,
+                "son_gunluk": 0,
+
+                "cf_sayisi": 0,
+                "slot_sayisi": 0,
+                "blackjack_sayisi": 0,
+                "toplam_kazanc": 0,
+                "toplam_kayip": 0,
+                "bosanma_sayisi": 0,
+
+                "aktif_gorev": None,
+                "gorev_progress": 0,
+                "tamamlanan_gorev": 0,
+
+                "rozetler": [],
+                "aktif_rozet": None,
+
+                "envanter": {
+                    "Bronz Kasa": 0,
+                    "Gümüş Kasa": 0,
+                    "Altın Kasa": 0,
+                    "Elmas Kasa": 0,
+                    "Premium Kasa": 0,
+                    "EwoPlus Kasa": 0,
+                    "Silah": 0,
+                    "Özel Koruma": 0,
+                    "Olta": 0,
+                    "Yüzük": 0
+                },
+
+                "yatirimlar": {
+                    "Altın": 0,
+                    "Plus": 0,
+                    "Bitcoin": 0,
+                    "Elmas": 0,
+                    "Dolar": 0,
+                    "Gümüş": 0
+                },
+
+                "isletmeler": {},
+
+                "pvp": {
+                    "win": 0,
+                    "lose": 0,
+                    "rank_point": 0,
+                    "duel_count": 0,
+                    "afk_penalty_until": 0,
+                    "last_duel_users": {}
+                },
+
+                "mafia_id": None,
+                "mafia_role": None,
+                "mafia_invites": [],
+
+                "money_earned": 0,
+
+                "season_reward_claimed": False
+            }
+        }
+    )
+
+    mafia_col.delete_many({})
+
+    await ctx.send("✅ **Yeni sezon başlatıldı! Tüm ekonomi sıfırlandı.**")
 
 
 # Bot tamamen hazır olmadan loop başlamasın
