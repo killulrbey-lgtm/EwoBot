@@ -4755,6 +4755,7 @@ async def baskın(ctx, member: discord.Member, *, isletme: str):
     )
 
     await ctx.send(mesaj)
+
 # =========================
 # MAFYA KUR
 # =========================
@@ -4767,10 +4768,10 @@ async def mafyakur(ctx, isim: str):
     if user.get("mafia_id"):
         return await ctx.send("❌ Zaten bir mafyadasın.")
 
-    if user.get("level",0) < 5:
+    if user.get("level", 0) < 5:
         return await ctx.send("❌ Mafya kurmak için **5 level** olmalısın.")
 
-    if user.get("cash",0) < 1_000_000:
+    if user.get("para", 0) < 1_000_000:
         return await ctx.send("❌ Mafya kurmak için **1.000.000** para gerekli.")
 
     if mafia_col.find_one({"name": isim}):
@@ -4781,8 +4782,8 @@ async def mafyakur(ctx, isim: str):
     mafia = {
         "_id": mafia_id,
         "name": isim,
-        "leader": ctx.author.id,
-        "members": [ctx.author.id],
+        "leader": str(ctx.author.id),
+        "members": [str(ctx.author.id)],
         "capacity": 5,
         "bank": 0,
         "wins": 0,
@@ -4793,9 +4794,16 @@ async def mafyakur(ctx, isim: str):
     mafia_col.insert_one(mafia)
 
     users.update_one(
-        {"_id": ctx.author.id},
-        {"$set": {"mafia_id": mafia_id, "mafia_role": "leader"},
-         "$inc": {"cash": -1_000_000}}
+        {"_id": str(ctx.author.id)},
+        {
+            "$set": {
+                "mafia_id": mafia_id,
+                "mafia_role": "leader"
+            },
+            "$inc": {
+                "para": -1_000_000
+            }
+        }
     )
 
     embed = discord.Embed(
@@ -4803,6 +4811,8 @@ async def mafyakur(ctx, isim: str):
         description=f"""
 **Mafya Adı:** {isim}
 **Kurucu:** {ctx.author.mention}
+
+Artık suç imparatorluğunu kurdun.
 """,
         color=0x000000
     )
@@ -4936,11 +4946,17 @@ async def mafyasavas(ctx, isim):
     if not user.get("mafia_id"):
         return await ctx.send("❌ Bir mafyada değilsin.")
 
+    if user.get("mafia_role") != "leader":
+        return await ctx.send("❌ Mafya savaşını sadece lider başlatabilir.")
+
     attacker = mafia_col.find_one({"_id": user["mafia_id"]})
     defender = mafia_col.find_one({"name": isim})
 
     if not defender:
         return await ctx.send("❌ Mafya bulunamadı.")
+
+    if attacker["_id"] == defender["_id"]:
+        return await ctx.send("❌ Kendi mafyana savaş açamazsın.")
 
     p1 = mafia_power(attacker)
     p2 = mafia_power(defender)
@@ -4949,25 +4965,53 @@ async def mafyasavas(ctx, isim):
 
     reward = 500000
 
-    mafia_col.update_one({"_id":winner["_id"]},{"$inc":{"wins":1}})
+    mafia_col.update_one(
+        {"_id": winner["_id"]},
+        {"$inc": {"wins": 1}}
+    )
 
     members = winner["members"]
 
-    leader_bonus = int(reward*0.2)
-    share = int((reward-leader_bonus)/len(members))
+    leader_bonus = int(reward * 0.2)
+    share = int((reward - leader_bonus) / len(members))
 
     for m in members:
 
-        if m == winner["leader"]:
-            users.update_one({"_id":m},{"$inc":{"cash":leader_bonus}})
+        if str(m) == str(winner["leader"]):
+            users.update_one(
+                {"_id": str(m)},
+                {"$inc": {"para": leader_bonus}}
+            )
         else:
-            users.update_one({"_id":m},{"$inc":{"cash":share}})
+            users.update_one(
+                {"_id": str(m)},
+                {"$inc": {"para": share}}
+            )
 
-    embed = discord.Embed(title="🔥 MAFYA SAVAŞI")
+    embed = discord.Embed(
+        title="🔥 MAFYA SAVAŞI",
+        color=0xff0000
+    )
 
-    embed.add_field(name=attacker["name"],value=f"{p1} güç")
-    embed.add_field(name=defender["name"],value=f"{p2} güç")
-    embed.add_field(name="Kazanan",value=winner["name"])
+    embed.add_field(
+        name=attacker["name"],
+        value=f"⚔ Güç: {p1}",
+        inline=True
+    )
+
+    embed.add_field(
+        name=defender["name"],
+        value=f"⚔ Güç: {p2}",
+        inline=True
+    )
+
+    embed.add_field(
+        name="🏆 Kazanan",
+        value=winner["name"],
+        inline=False
+    )
+
+    embed.set_footer(text=f"{reward:,} para ödül dağıtıldı")
 
     await ctx.send(embed=embed)
 
