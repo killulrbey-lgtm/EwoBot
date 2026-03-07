@@ -114,6 +114,7 @@ ISLETMELER = {
 invite_cache = {}
 mafia_col = db["mafias"]
 mafia_invites = db["mafia_invites"]
+mafia_msg = None
 
 # ================= TEST KOMUT =================
 
@@ -5061,12 +5062,10 @@ async def mafia_board():
     global mafia_msg
 
     guild = bot.get_guild(1471843922115301493)
-
     if not guild:
         return
 
     channel = guild.get_channel(1479642291663802569)
-
     if not channel:
         return
 
@@ -5078,7 +5077,6 @@ async def mafia_board():
     )
 
     for i, mafia in enumerate(mafias, 1):
-
         embed.add_field(
             name=f"{i}. {mafia['name']}",
             value=f"{mafia['wins']} savaş",
