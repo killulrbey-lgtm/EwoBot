@@ -4762,7 +4762,8 @@ async def baskın(ctx, member: discord.Member, *, isletme: str):
 @bot.command(name="mafyakur")
 async def mafyakur(ctx, isim: str):
 
-    user = get_user(ctx.author.id)
+    user_id = str(ctx.author.id)
+    user = get_user(user_id)
 
     if user.get("mafia_id"):
         return await ctx.send("❌ Zaten bir mafyadasın.")
@@ -4781,19 +4782,18 @@ async def mafyakur(ctx, isim: str):
     mafia = {
         "_id": mafia_id,
         "name": isim,
-        "leader": str(ctx.author.id),
-        "members": [str(ctx.author.id)],
+        "leader": user_id,
+        "members": [user_id],
         "capacity": 5,
         "bank": 0,
         "wins": 0,
-        "points": 0,
         "guild": ctx.guild.id
     }
 
     mafia_col.insert_one(mafia)
 
-    users.update_one(
-        {"_id": str(ctx.author.id)},   # BURASI ÇOK ÖNEMLİ
+    collection.update_one(
+        {"_id": user_id},
         {
             "$set": {
                 "mafia_id": mafia_id,
@@ -4807,22 +4807,21 @@ async def mafyakur(ctx, isim: str):
 
     embed = discord.Embed(
         title="🏴 Yeni Mafya Kuruldu!",
-        description=f"""
-**Mafya Adı:** {isim}
-**Kurucu:** {ctx.author.mention}
-""",
+        description=f"**{isim}** mafyası {ctx.author.mention} tarafından kuruldu.",
         color=0x000000
     )
 
     await ctx.send(embed=embed)
+
 # =========================
 # MAFYA BİLGİ
 # =========================
 
-@bot.command(name="mafya")
+@bot.command(name="mafyabilgi")
 async def mafya_bilgi(ctx):
 
-    user = get_user(ctx.author.id)
+    user_id = str(ctx.author.id)
+    user = get_user(user_id)
 
     if not user.get("mafia_id"):
         return await ctx.send("❌ Mafyada değilsin.")
@@ -4831,10 +4830,25 @@ async def mafya_bilgi(ctx):
 
     embed = discord.Embed(title=f"🏴 {mafia['name']}")
 
-    embed.add_field(name="👑 Lider", value=f"<@{mafia['leader']}>")
-    embed.add_field(name="👥 Üye", value=f"{len(mafia['members'])}/{mafia['capacity']}")
-    embed.add_field(name="💰 Kasa", value=f"{mafia['bank']:,}")
-    embed.add_field(name="🏆 Savaş", value=mafia["wins"])
+    embed.add_field(
+        name="👑 Lider",
+        value=f"<@{mafia['leader']}>"
+    )
+
+    embed.add_field(
+        name="👥 Üye",
+        value=f"{len(mafia['members'])}/{mafia['capacity']}"
+    )
+
+    embed.add_field(
+        name="💰 Kasa",
+        value=f"{mafia['bank']:,}"
+    )
+
+    embed.add_field(
+        name="🏆 Savaş",
+        value=mafia["wins"]
+    )
 
     await ctx.send(embed=embed)
 
@@ -4845,7 +4859,8 @@ async def mafya_bilgi(ctx):
 @bot.command()
 async def mafyadavet(ctx, member: discord.Member):
 
-    user = get_user(ctx.author.id)
+    user_id = str(ctx.author.id)
+    user = get_user(user_id)
 
     if user.get("mafia_role") != "leader":
         return await ctx.send("❌ Sadece lider davet edebilir.")
@@ -4856,7 +4871,7 @@ async def mafyadavet(ctx, member: discord.Member):
         return await ctx.send("❌ Mafya dolu.")
 
     mafia_invites.update_one(
-        {"user": member.id},
+        {"user": str(member.id)},
         {"$addToSet": {"invites": mafia["_id"]}},
         upsert=True
     )
