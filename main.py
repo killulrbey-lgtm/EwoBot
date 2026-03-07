@@ -1721,7 +1721,7 @@ async def gzenginler(ctx):
 # 🔁 10 DAKİKADA BİR GLOBAL EwoPlusCoin
 # =====================================================
 
-GLOBAL_ZENGINLER_KANAL_ID = 1474500301758267565
+GLOBAL_ZENGINLER_KANAL_ID = 1479627190864838778
 global_zenginler_mesaj_id = None
 
 
@@ -1832,7 +1832,7 @@ async def enflasyon(ctx):
 # 📈 ENFLASYON OTOMATİK (SAFE VERSION)
 # =====================================================
 
-ENFLASYON_KANAL_ID = 1474499745257881762
+ENFLASYON_KANAL_ID = 1479627407978795191
 enflasyon_mesaj_id = None
 
 
@@ -2627,7 +2627,7 @@ class TicketPanelView(discord.ui.View):
 
 ADMIN_ID = 1271933410251772017
 BAKIM_KANAL_ID = 1474489287859769656
-EKONOMI_LOG_KANAL = 1474499591238848555
+EKONOMI_LOG_KANAL = 1479627190864838778
 
 # =====================================================
 # YARDIMCI FONKSİYON
