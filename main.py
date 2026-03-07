@@ -67,9 +67,6 @@ intents.message_content = True
 intents.invites = True  # ÖNEMLİ
 
 
-mafia_col = db["mafias"]
-mafia_invites = db["mafia_invites"]
-
 active_duels = {}
 duel_history = defaultdict(list)  # anti boost için
 DUEL_TIMEOUT = 120  # 2 dakika hamle süresi
@@ -115,6 +112,8 @@ ISLETMELER = {
 }
 
 invite_cache = {}
+mafia_col = db["mafias"]
+mafia_invites = db["mafia_invites"]
 
 # ================= TEST KOMUT =================
 
@@ -5058,8 +5057,18 @@ async def gmafyalar(ctx):
 
 @tasks.loop(hours=2)
 async def mafia_board():
+
+    global mafia_msg
+
     guild = bot.get_guild(1471843922115301493)
+
+    if not guild:
+        return
+
     channel = guild.get_channel(1479642291663802569)
+
+    if not channel:
+        return
 
     mafias = mafia_col.find().sort("wins", -1).limit(10)
 
@@ -5069,19 +5078,17 @@ async def mafia_board():
     )
 
     for i, mafia in enumerate(mafias, 1):
+
         embed.add_field(
             name=f"{i}. {mafia['name']}",
             value=f"{mafia['wins']} savaş",
             inline=False
         )
 
-    global mafia_msg
-
     if mafia_msg:
         await mafia_msg.edit(embed=embed)
     else:
         mafia_msg = await channel.send(embed=embed)
-
 
 
 # =====================================================
