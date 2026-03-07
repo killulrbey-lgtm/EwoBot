@@ -867,6 +867,8 @@ async def bankayatır(ctx, miktar: int):
 
     await ctx.send(f"🏦 {ctx.author.mention}, bankaya {formatla(miktar)} EwoCoin yatırdınız")
 
+from discord.ui import View, Button
+
 @bot.command()
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def yardım(ctx):
@@ -3217,8 +3219,8 @@ class MarketMainView(discord.ui.View):
     async def ekonomi(self, interaction, button):
 
         await interaction.response.edit_message(
-            embed=ekonomi_embed(),
-            view=EkonomiView()
+            embed=ekonomii_embed(),
+            view=EkonomiiView()
         )
 
     @discord.ui.button(label="👑 Gösteriş", style=discord.ButtonStyle.secondary)
@@ -3256,7 +3258,7 @@ def soygun_embed():
         color=discord.Color.red()
     )
 
-def ekonomi_embed():
+def ekonomii_embed():
     return discord.Embed(
         title="🎣 Ekonomi Marketi",
         description=
@@ -3334,7 +3336,7 @@ class SoygunView(discord.ui.View):
             view=MarketMainView()
         )
 
-class EkonomiView(discord.ui.View):
+class EkonomiiView(discord.ui.View):
 
     def __init__(self):
         super().__init__(timeout=None)
