@@ -1296,7 +1296,7 @@ async def dilen(ctx):
 
     await xp_ekle(ctx.author.id, 5)
 
-# BLACK JACK
+# BLACK JACKK
 
 @bot.command()
 @commands.cooldown(1, 10, commands.BucketType.user)
