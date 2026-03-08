@@ -680,7 +680,7 @@ async def level(ctx):
 
     embed.add_field(
         name="✨ XP",
-        value=f"{xp_bar} / {gereken}",
+        value=f"{xp} / {gereken}",
         inline=True
     )
 
