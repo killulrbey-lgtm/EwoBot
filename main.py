@@ -662,20 +662,36 @@ async def level(ctx):
 
     xp_bar = min(xp, gereken)
 
-    oran = int((xp_bar / gereken) * 10)
+    oran = int((xp_bar / gereken) * 10) if gereken > 0 else 0
 
     bar = "🟩" * oran + "⬜" * (10 - oran)
 
     embed = discord.Embed(
         title="🏆 Kullanıcı Profili",
+        description=f"{ctx.author.mention} kullanıcısının seviyesi",
         color=discord.Color.gold()
     )
 
-    embed.add_field(name="Seviye", value=f"LVL {level}", inline=True)
-    embed.add_field(name="XP", value=f"{xp_bar} / {gereken}", inline=True)
-    embed.add_field(name="İlerleme", value=bar, inline=False)
+    embed.add_field(
+        name="📊 Seviye",
+        value=f"LVL {level}",
+        inline=True
+    )
+
+    embed.add_field(
+        name="✨ XP",
+        value=f"{xp_bar} / {gereken}",
+        inline=True
+    )
+
+    embed.add_field(
+        name="📈 İlerleme",
+        value=bar,
+        inline=False
+    )
 
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
+    embed.set_footer(text="EwoBot Level Sistemi")
 
     await ctx.send(embed=embed)
 
@@ -2413,7 +2429,7 @@ MILESTONES = {
     1000: 50000
 }
 
-MILESTONE_KANAL = 1474728861920137276
+MILESTONE_KANAL = 1474497995297918976
 BOT_LOG_KANAL = 1474500594554372247
 
 
