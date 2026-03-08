@@ -117,6 +117,8 @@ invite_cache = {}
 mafia_col = db["mafias"]
 mafia_invites = db["mafia_invites"]
 mafia_msg = None
+active_drop = False
+drop_winner = None
 
 # ================= TEST KOMUT =================
 
@@ -242,6 +244,31 @@ def isletme_geliri_hesapla(user, isletme):
     saatlik = ISLETMELER.get(isletme, {}).get("gelir", 0)
 
     return adet * saatlik
+
+async def send_global_drop():
+
+    global active_drop
+    global drop_winner
+
+    active_drop = True
+    drop_winner = None
+
+    users = collection.find()
+
+    for user in users:
+        try:
+            member = await bot.fetch_user(int(user["_id"]))
+
+            embed = discord.Embed(
+                title="🎁 Kasa Düştü!",
+                description="İlk **q!al** yazan **25.000 EwoCoin** kazanacak!",
+                color=0xf1c40f
+            )
+
+            await member.send(embed=embed)
+
+        except:
+            pass
 
 async def xp_ekle(user_id, miktar):
 
@@ -1336,6 +1363,228 @@ async def dilen(ctx):
         await ctx.send(f"🕴 Gizemli takım elbiseli adam {formatla(kazanc)} bıraktı!")
 
     await xp_ekle(ctx.author.id, 5)
+
+# Çalış
+@bot.command(name="çalış")
+@commands.cooldown(1, 120, commands.BucketType.user)
+async def calis(ctx):
+
+    user = get_user(ctx.author.id)
+
+    isler = {
+        "Çöpçü": (300, 800),
+        "Garson": (500, 1200),
+        "Kasiyer": (600, 1500),
+        "Taksici": (800, 2000),
+        "Madenci": (1200, 3000),
+        "Aşçı": (1500, 3500),
+        "Öğretmen": (2000, 4500),
+        "Polis": (2500, 5000),
+        "Mühendis": (3000, 7000),
+        "Yazılımcı": (4000, 10000)
+    }
+
+    is_sec = random.choice(list(isler.keys()))
+
+    min_para, max_para = isler[is_sec]
+
+    kazanc = random.randint(min_para, max_para)
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {
+                "para": kazanc,
+                "toplam_kazanc": kazanc
+            }
+        }
+    )
+
+    await ctx.send(
+        f"💼 {is_sec} olarak çalıştın ve **{formatla(kazanc)} EwoCoin** kazandın!"
+    )
+
+    await xp_ekle(ctx.author.id, 5)
+    await rozet_kontrol(ctx.author.id)
+
+# Ara
+@bot.command(name="ara")
+@commands.cooldown(1, 60, commands.BucketType.user)
+async def ara(ctx):
+
+    user = get_user(ctx.author.id)
+
+    yerler = {
+        "Çöp Kutusu": (100, 700, 0.40),
+        "Araba": (800, 1500, 0.30),
+        "Plaj": (1600, 2500, 0.20),
+        "Ev": (2600, 7500, 0.10)
+    }
+
+    yer = random.choices(
+        list(yerler.keys()),
+        weights=[v[2] for v in yerler.values()]
+    )[0]
+
+    min_p, max_p, _ = yerler[yer]
+
+    # polis riski
+    if random.random() < 0.15:
+        ceza = 300
+
+        if user["para"] >= ceza:
+            collection.update_one(
+                {"_id": str(ctx.author.id)},
+                {"$inc": {"para": -ceza}}
+            )
+        else:
+            kalan = ceza - user["para"]
+
+            collection.update_one(
+                {"_id": str(ctx.author.id)},
+                {"$set": {"para": 0}, "$inc": {"banka": -kalan}}
+            )
+
+        return await ctx.send("🚓 Polis geldi ve **300 EwoCoin** ceza kesti!")
+
+    kazanc = random.randint(min_p, max_p)
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": kazanc}}
+    )
+
+    await ctx.send(
+        f"🔎 {yer} aradın ve **{formatla(kazanc)} EwoCoin** buldun!"
+    )
+
+    await xp_ekle(ctx.author.id, 5)
+
+# Suç
+@bot.command(name="suç")
+@commands.cooldown(1, 80, commands.BucketType.user)
+async def suc(ctx):
+
+    user = get_user(ctx.author.id)
+
+    suc_list = {
+        "Evi soymaya çalıştın": (1500, 4000, 300),
+        "Market soymaya çalıştın": (2000, 5000, 400),
+        "Kuyumcu soymaya çalıştın": (3000, 7000, 700),
+        "Bankayı soymaya çalıştın": (5000, 10000, 1000)
+    }
+
+    olay = random.choice(list(suc_list.keys()))
+
+    min_p, max_p, ceza = suc_list[olay]
+
+    if random.random() < 0.45:
+
+        if user["para"] >= ceza:
+            collection.update_one(
+                {"_id": str(ctx.author.id)},
+                {"$inc": {"para": -ceza}}
+            )
+        else:
+            kalan = ceza - user["para"]
+
+            collection.update_one(
+                {"_id": str(ctx.author.id)},
+                {"$set": {"para": 0}, "$inc": {"banka": -kalan}}
+            )
+
+        return await ctx.send(f"🚔 {olay} fakat yakalandın! **-{formatla(ceza)} EwoCoin**")
+
+    kazanc = random.randint(min_p, max_p)
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": kazanc}}
+    )
+
+    await ctx.send(
+        f"💰 {olay} ve **{formatla(kazanc)} EwoCoin** kazandın!"
+    )
+
+    await xp_ekle(ctx.author.id, 6)
+
+# Avlan
+@bot.command(name="avlan")
+@commands.cooldown(1, 45, commands.BucketType.user)
+async def avlan(ctx):
+
+    hayvanlar = {
+        "Tavşan": (200, 400),
+        "Ördek": (300, 600),
+        "Tilki": (500, 900),
+        "Geyik": (900, 1500),
+        "Yaban Domuzu": (1200, 2000),
+        "Kurt": (1800, 2600),
+        "Ayı": (2500, 3500),
+        "Dağ Keçisi": (3000, 4200),
+        "Kartal": (3500, 4800),
+        "Altın Geyik": (4500, 5000)
+    }
+
+    hayvan = random.choice(list(hayvanlar.keys()))
+
+    min_p, max_p = hayvanlar[hayvan]
+
+    kazanc = random.randint(min_p, max_p)
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": kazanc}}
+    )
+
+    await ctx.send(
+        f"🏹 {hayvan} avladın ve **{formatla(kazanc)} EwoCoin** kazandın!"
+    )
+
+    await xp_ekle(ctx.author.id, 5)
+
+# AL
+@bot.command(name="al")
+async def al(ctx):
+
+    global active_drop
+    global drop_winner
+
+    if not active_drop:
+        if drop_winner:
+            return await ctx.send(
+                f"❌ {drop_winner} çoktan kasayı kaptı!"
+            )
+        return
+
+    active_drop = False
+    drop_winner = ctx.author
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": 25000}},
+        upsert=True
+    )
+
+    await ctx.send(
+        f"🎉 {ctx.author.mention} kasayı kaptı! **25.000 EwoCoin** kazandı!"
+    )
+
+
+@bot.command()
+async def drop(ctx):
+
+    if ctx.author.id != 1271933410251772017:
+        return await ctx.send("❌ Bu komutu kullanamazsın.")
+
+    global active_drop
+
+    if active_drop:
+        return await ctx.send("❌ Zaten aktif bir kasa var.")
+
+    await send_global_drop()
+    await ctx.send("🎁 Global kasa gönderildi.")
+
 
 # BLACK JACKK
 
