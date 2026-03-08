@@ -247,22 +247,14 @@ async def xp_ekle(user_id, miktar):
 
     user = get_user(user_id)
 
-    xp = user.get("xp", 0)
-    level = user.get("level", 1)
+    xp = int(user.get("xp", 0))
+    level = int(user.get("level", 1))
 
     xp += miktar
-    gereken = level * 500
 
-    while xp >= gereken:
-        xp -= gereken
+    while xp >= level * 100:
+        xp -= level * 100
         level += 1
-        gereken = level * 500
-
-        # Level atlama ödülü
-        collection.update_one(
-            {"_id": str(user_id)},
-            {"$inc": {"para": level * 1000}}
-        )
 
     collection.update_one(
         {"_id": str(user_id)},
