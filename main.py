@@ -230,6 +230,7 @@ def get_user(user_id):
                 # 🏴 MAFYA SİSTEMİ
                 "mafia_id": None,        # bulunduğu mafya
                 "mafia_role": None,      # leader / member
+		"mafia_custom_role": "Mafya Üyesi",
                 "mafia_invites": [],     # gelen davetler
 
                 # 💰 Savaş gücü için
@@ -1636,7 +1637,7 @@ async def al(ctx):
     await ctx.send(
         f"🎉 {ctx.author.mention} kasayı kaptı! **{formatla(drop_amount)} EwoCoin** kazandı!"
     )
-
+# drop
 @bot.command()
 async def drop(ctx, miktar: int, zaman: str):
 
@@ -1662,6 +1663,9 @@ async def drop(ctx, miktar: int, zaman: str):
 
     await ctx.send(f"📦 Drop başlatıldı. {len(users)} kullanıcı kontrol ediliyor...")
 
+    basarili = 0
+    basarisiz = 0
+
     for user in users:
 
         if "_id" not in user:
@@ -1679,7 +1683,6 @@ async def drop(ctx, miktar: int, zaman: str):
 
             user_id = int(user["_id"])
 
-            # önce cache kontrolü (daha hızlı)
             member = bot.get_user(user_id)
 
             if not member:
@@ -1726,31 +1729,39 @@ async def drop(ctx, miktar: int, zaman: str):
 
             try:
                 await member.send(embed=embed, view=view)
+                basarili += 1
 
             except discord.HTTPException as e:
 
-                # Rate limit yakalama
+                basarisiz += 1
+
                 if e.status == 429:
                     retry = getattr(e, "retry_after", 10)
                     await asyncio.sleep(retry)
-                    continue
 
-            # DM arası bekleme
             await asyncio.sleep(3.5)
 
         except:
-            pass
+            basarisiz += 1
+
+    await ctx.send(
+        f"📦 Drop DM gönderimi tamamlandı!\n\n"
+        f"📨 Gönderilen: **{basarili}**\n"
+        f"❌ Başarısız: **{basarisiz}**"
+    )
 
 @bot.command()
 async def dmduyuru(ctx, *, mesaj):
 
-    if ctx.author.id != 1271933410251772017:
+    if ctx.author.id != 1475533273160618204:
         return await ctx.send("❌ Bu komutu kullanamazsın.")
 
-    # sadece gerekli veriyi çek
     users = list(collection.find({}, {"_id": 1}))
 
     await ctx.send(f"📢 Duyuru gönderiliyor... ({len(users)} kullanıcı)")
+
+    basarili = 0
+    basarisiz = 0
 
     for user in users:
 
@@ -1761,7 +1772,6 @@ async def dmduyuru(ctx, *, mesaj):
 
             user_id = int(user["_id"])
 
-            # cache kontrolü
             member = bot.get_user(user_id)
 
             if not member:
@@ -1771,20 +1781,28 @@ async def dmduyuru(ctx, *, mesaj):
                 continue
 
             embed = discord.Embed(
-                title="📢 Ewo Bot Duyuru",
+                title="📢 EwoBot Duyuru",
                 description=mesaj,
                 color=discord.Color.blurple()
             )
 
             embed.set_thumbnail(url=bot.user.display_avatar.url)
-            embed.set_footer(text="Ewo Bot")
+            embed.set_footer(text="EwoBot")
 
             await member.send(embed=embed)
+
+            basarili += 1
 
             await asyncio.sleep(5)
 
         except:
-            pass
+            basarisiz += 1
+
+    await ctx.send(
+        f"✅ Duyuru tamamlandı!\n"
+        f"📨 Gönderilen: **{basarili}**\n"
+        f"❌ Başarısız: **{basarisiz}**"
+    )
 
 # BLACK JACKK
 
@@ -5273,7 +5291,14 @@ async def mafyakur(ctx, isim: str):
         "bank": 0,
         "wins": 0,
         "guild": ctx.guild.id,
-        "war": None
+        "war": None,
+
+        # ⭐ Mafya rol sistemi
+        "roles": [
+            {"name": "Mafya Lideri", "rank": 10, "manager": True},
+            {"name": "Mafya Yöneticisi", "rank": 7, "manager": False},
+            {"name": "Mafya Üyesi", "rank": 1, "manager": False}
+        ]
     }
 
     mafia_col.insert_one(mafia)
@@ -5283,7 +5308,8 @@ async def mafyakur(ctx, isim: str):
         {
             "$set": {
                 "mafia_id": mafia_id,
-                "mafia_role": "leader"
+                "mafia_role": "leader",
+                "mafia_custom_role": "Mafya Lideri"
             },
             "$inc": {
                 "para": -1_000_000
@@ -5298,6 +5324,7 @@ async def mafyakur(ctx, isim: str):
     )
 
     await ctx.send(embed=embed)
+
 # =========================
 # MAFYA BİLGİ
 # =========================
@@ -5807,6 +5834,213 @@ async def mafyasil(ctx, *, isim):
     mafia_col.delete_one({"_id": mafia["_id"]})
 
     await ctx.send(f"🗑 **{isim}** mafyası silindi.")
+
+@bot.command()
+async def mafyadevret(ctx, member: discord.Member):
+
+    user = get_user(ctx.author.id)
+
+    if user.get("mafia_role") != "leader":
+        return await ctx.send("❌ Sadece lider devredebilir.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    if str(member.id) not in mafia["members"]:
+        return await ctx.send("❌ Kullanıcı mafyada değil.")
+
+    mafia_col.update_one(
+        {"_id": mafia["_id"]},
+        {"$set": {"leader": str(member.id)}}
+    )
+
+    collection.update_one(
+        {"_id": str(member.id)},
+        {"$set": {"mafia_role": "leader"}}
+    )
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$set": {"mafia_role": "member"}}
+    )
+
+    await ctx.send(f"👑 Liderlik {member.mention} kullanıcısına devredildi.")
+
+@bot.command()
+async def mafyarolleri(ctx):
+
+    user = get_user(ctx.author.id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Mafyada değilsin.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    roles = sorted(mafia["roles"], key=lambda x: x["rank"], reverse=True)
+
+    embed = discord.Embed(
+        title=f"🏴 {mafia['name']} Mafya Rolleri",
+        color=0x2f3136
+    )
+
+    for r in roles:
+
+        yonetici = "✅" if r["manager"] else "❌"
+
+        embed.add_field(
+            name=r["name"],
+            value=f"Rank: {r['rank']}\nYönetici Yetkisi: {yonetici}",
+            inline=False
+        )
+
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def rololustur(ctx, rol: str, rank: int):
+
+    user = get_user(ctx.author.id)
+
+    if user.get("mafia_role") != "leader":
+        return await ctx.send("❌ Sadece lider rol oluşturabilir.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    if len(mafia["roles"]) >= 10:
+        return await ctx.send("❌ En fazla **10 rol** olabilir.")
+
+    for r in mafia["roles"]:
+
+        if r["name"].lower() == rol.lower():
+            return await ctx.send("❌ Bu isimde rol var.")
+
+        if r["rank"] == rank:
+            return await ctx.send("❌ Bu rank zaten kullanılıyor.")
+
+    if mafia["bank"] < 25000:
+        return await ctx.send("❌ Mafya kasasında **25.000** yok.")
+
+    mafia_col.update_one(
+        {"_id": mafia["_id"]},
+        {
+            "$push": {
+                "roles": {
+                    "name": rol,
+                    "rank": rank,
+                    "manager": False
+                }
+            },
+            "$inc": {"bank": -25000}
+        }
+    )
+
+    await ctx.send(f"✅ **{rol}** rolü oluşturuldu.")
+
+@bot.command()
+async def roldegistir(ctx, member: discord.Member, *, rol):
+
+    user = get_user(ctx.author.id)
+    target = get_user(member.id)
+
+    if user.get("mafia_id") != target.get("mafia_id"):
+        return await ctx.send("❌ Aynı mafyada değilsiniz.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    roles = mafia["roles"]
+
+    giver_role = next((r for r in roles if r["name"] == user["mafia_custom_role"]), None)
+    target_role = next((r for r in roles if r["name"].lower() == rol.lower()), None)
+
+    if not target_role:
+        return await ctx.send("❌ Rol bulunamadı.")
+
+    if not giver_role["manager"] and user["mafia_role"] != "leader":
+        return await ctx.send("❌ Rol değiştirme yetkin yok.")
+
+    if giver_role["rank"] <= target_role["rank"]:
+        return await ctx.send("❌ Kendinden yüksek rol veremezsin.")
+
+    collection.update_one(
+        {"_id": str(member.id)},
+        {"$set": {"mafia_custom_role": target_role["name"]}}
+    )
+
+    await ctx.send(f"✅ {member.mention} artık **{rol}** rolünde.")
+
+@bot.command()
+async def yoneticiver(ctx, *, rol):
+
+    user = get_user(ctx.author.id)
+
+    if user.get("mafia_role") != "leader":
+        return await ctx.send("❌ Sadece lider kullanabilir.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    for r in mafia["roles"]:
+
+        if r["name"].lower() == rol.lower():
+
+            mafia_col.update_one(
+                {"_id": mafia["_id"], "roles.name": r["name"]},
+                {"$set": {"roles.$.manager": True}}
+            )
+
+            return await ctx.send(f"✅ **{rol}** rolüne yönetici yetkisi verildi.")
+
+    await ctx.send("❌ Rol bulunamadı.")
+
+@bot.command()
+async def yoneticikaldir(ctx, *, rol):
+
+    user = get_user(ctx.author.id)
+
+    if user.get("mafia_role") != "leader":
+        return await ctx.send("❌ Sadece lider kullanabilir.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    for r in mafia["roles"]:
+
+        if r["name"].lower() == rol.lower():
+
+            mafia_col.update_one(
+                {"_id": mafia["_id"], "roles.name": r["name"]},
+                {"$set": {"roles.$.manager": False}}
+            )
+
+            return await ctx.send(f"❌ **{rol}** yönetici yetkisi kaldırıldı.")
+
+    await ctx.send("❌ Rol bulunamadı.")
+
+
+@bot.command()
+async def rolkaldir(ctx, *, rol):
+
+    user = get_user(ctx.author.id)
+
+    if user.get("mafia_role") != "leader":
+        return await ctx.send("❌ Sadece lider kullanabilir.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    if mafia["bank"] < 1000:
+        return await ctx.send("❌ Mafya kasasında **1000** yok.")
+
+    users = collection.find({"mafia_id": mafia["_id"], "mafia_custom_role": rol})
+
+    if list(users):
+        return await ctx.send("❌ Bu rolde kullanıcı var.")
+
+    mafia_col.update_one(
+        {"_id": mafia["_id"]},
+        {
+            "$pull": {"roles": {"name": rol}},
+            "$inc": {"bank": -1000}
+        }
+    )
+
+    await ctx.send(f"🗑 **{rol}** rolü silindi.")
+
 
 # =====================================================
 # DUEL TIMEOUT LOOP
