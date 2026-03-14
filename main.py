@@ -1888,7 +1888,7 @@ async def drop(ctx, miktar: int, zaman: str):
 @bot.command()
 async def dmduyuru(ctx, *, mesaj):
 
-    if ctx.author.id != 1475533273160618204:
+    if ctx.author.id != 1271933410251772017:
         return await ctx.send("❌ Bu komutu kullanamazsın.")
 
     users = list(collection.find({}, {"_id": 1}))
