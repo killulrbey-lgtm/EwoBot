@@ -1833,7 +1833,7 @@ async def drop(ctx, miktar: int, zaman: str):
             )
 
             embed.set_thumbnail(url=bot.user.display_avatar.url)
-            embed.set_footer(text="Ewo Bot")
+            embed.set_footer(text="Kasa Dm Kapat butonuna bastıysanız Kasa düştüğünde bot size dm gelmeyecek.  "q!kasaat" yazdığınızda bot size dm gelmeye devam edecek")
 
             view = discord.ui.View(timeout=None)
 
