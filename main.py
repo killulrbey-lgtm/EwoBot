@@ -1058,6 +1058,24 @@ q!gmafyalar
 Global en iyi mafyalar
 q!smafyalar
 Sunucudaki en iyi mafyalar
+q!mafyadevret @kullanıcı
+Mafyanı başkasına devreder
+q!mafyarolleri
+Mafya grubunun rollerini listeler
+q!rololustur <rolismi> <rank>
+Mafya grubunda yeni rol oluşturur
+q!rolkaldir <rolismi>
+Mafya grubundaki rolü siler
+q!roldegistir @kullanıcı <rolismi>
+Mafya üyesinin rolünü değiştirir
+q!yöneticiver <rolismi>
+Mafya grubundaki role yönetici verir
+q!yöneticikaldir <rolismi>
+Mafya grubundaki rolün yöneticisini alır
+q!mafyarol
+Mafya rolünü gösterir
+q!mafyalistesi 
+Bulunduğun mafyadaki üyeleri listeler
 q!mafyabaskın <mafya>
 Başka mafyanın kasasını soymaya çalışır
 """,
@@ -5894,13 +5912,22 @@ async def mafyarolleri(ctx):
 
     await ctx.send(embed=embed)
 
-@bot.command()
-async def rololustur(ctx, rol: str, rank: int):
+@bot.command(name="rololustur")
+async def rololustur(ctx, *, args):
 
     user = get_user(ctx.author.id)
 
     if user.get("mafia_role") != "leader":
         return await ctx.send("❌ Sadece lider rol oluşturabilir.")
+
+    try:
+        rol, rank = args.rsplit(" ", 1)
+        rank = int(rank)
+    except:
+        return await ctx.send("❌ Kullanım: qrololustur <rolismi> <rank>")
+
+    if rank < 1 or rank > 10:
+        return await ctx.send("❌ Rank **1 ile 10 arasında** olmalı.")
 
     mafia = mafia_col.find_one({"_id": user["mafia_id"]})
 
@@ -5932,31 +5959,50 @@ async def rololustur(ctx, rol: str, rank: int):
         }
     )
 
-    await ctx.send(f"✅ **{rol}** rolü oluşturuldu.")
+    await ctx.send(f"✅ **{rol}** rolü oluşturuldu. (Rank: {rank})")
 
-@bot.command()
+@bot.command(name="roldegistir")
 async def roldegistir(ctx, member: discord.Member, *, rol):
+
+    if member.id == ctx.author.id:
+        return await ctx.send("❌ Kendi rolünü değiştiremezsin.")
 
     user = get_user(ctx.author.id)
     target = get_user(member.id)
 
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Mafyada değilsin.")
+
     if user.get("mafia_id") != target.get("mafia_id"):
         return await ctx.send("❌ Aynı mafyada değilsiniz.")
+
+    if target.get("mafia_role") == "leader":
+        return await ctx.send("❌ Liderin rolü değiştirilemez.")
 
     mafia = mafia_col.find_one({"_id": user["mafia_id"]})
 
     roles = mafia["roles"]
 
-    giver_role = next((r for r in roles if r["name"] == user["mafia_custom_role"]), None)
-    target_role = next((r for r in roles if r["name"].lower() == rol.lower()), None)
+    giver_role = next(
+        (r for r in roles if r["name"] == user.get("mafia_custom_role")),
+        None
+    )
+
+    target_role = next(
+        (r for r in roles if r["name"].lower() == rol.lower()),
+        None
+    )
 
     if not target_role:
         return await ctx.send("❌ Rol bulunamadı.")
 
-    if not giver_role["manager"] and user["mafia_role"] != "leader":
+    if not giver_role and user.get("mafia_role") != "leader":
+        return await ctx.send("❌ Rolün bulunamadı.")
+
+    if not giver_role["manager"] and user.get("mafia_role") != "leader":
         return await ctx.send("❌ Rol değiştirme yetkin yok.")
 
-    if giver_role["rank"] <= target_role["rank"]:
+    if giver_role and giver_role["rank"] <= target_role["rank"]:
         return await ctx.send("❌ Kendinden yüksek rol veremezsin.")
 
     collection.update_one(
@@ -5964,10 +6010,12 @@ async def roldegistir(ctx, member: discord.Member, *, rol):
         {"$set": {"mafia_custom_role": target_role["name"]}}
     )
 
-    await ctx.send(f"✅ {member.mention} artık **{rol}** rolünde.")
+    await ctx.send(
+        f"✅ {member.mention} artık **{target_role['name']}** rolünde."
+    )
 
 @bot.command()
-async def yoneticiver(ctx, *, rol):
+async def yöneticiver(ctx, *, rol):
 
     user = get_user(ctx.author.id)
 
@@ -5985,12 +6033,12 @@ async def yoneticiver(ctx, *, rol):
                 {"$set": {"roles.$.manager": True}}
             )
 
-            return await ctx.send(f"✅ **{rol}** rolüne yönetici yetkisi verildi.")
+            return await ctx.send(f"✅ **{r['name']}** rolüne yönetici yetkisi verildi.")
 
     await ctx.send("❌ Rol bulunamadı.")
 
 @bot.command()
-async def yoneticikaldir(ctx, *, rol):
+async def yöneticikaldir(ctx, *, rol):
 
     user = get_user(ctx.author.id)
 
@@ -6041,6 +6089,65 @@ async def rolkaldir(ctx, *, rol):
 
     await ctx.send(f"🗑 **{rol}** rolü silindi.")
 
+@bot.command()
+async def mafyalistesi(ctx):
+
+    user = get_user(ctx.author.id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Mafyada değilsin.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    users = collection.find({"mafia_id": mafia["_id"]})
+
+    embed = discord.Embed(
+        title=f"🏴 {mafia['name']} Üyeleri",
+        color=0x2f3136
+    )
+
+    text = ""
+
+    for u in users:
+
+        member = ctx.guild.get_member(int(u["_id"]))
+
+        if not member:
+            continue
+
+        rol = u.get("mafia_custom_role", "Mafya Üyesi")
+
+        text += f"{member.mention} → **{rol}**\n"
+
+    embed.description = text
+
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def mafyarol(ctx):
+
+    user = get_user(ctx.author.id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Mafyada değilsin.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    role_name = user.get("mafia_custom_role")
+
+    role = next((r for r in mafia["roles"] if r["name"] == role_name), None)
+
+    manager = "✅ Var" if role and role["manager"] else "❌ Yok"
+
+    embed = discord.Embed(
+        title="🏴 Mafya Rolün",
+        color=0x2f3136
+    )
+
+    embed.add_field(name="Rol", value=role_name)
+    embed.add_field(name="Yönetici Yetkisi", value=manager)
+
+    await ctx.send(embed=embed)
 
 # =====================================================
 # DUEL TIMEOUT LOOP
