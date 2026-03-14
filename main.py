@@ -94,6 +94,14 @@ bot = commands.Bot(
     help_command=None        # 🔥 Default help kapalı
 )
 
+
+@bot.listen("on_command")
+async def update_last_active(ctx):
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$set": {"last_active": int(time.time())}}
+    )
+
 ISLETMELER = {
 
     "maden": {"fiyat": 300000, "gelir": 4000},
@@ -119,6 +127,8 @@ mafia_invites = db["mafia_invites"]
 mafia_msg = None
 active_drop = False
 drop_winner = None
+drop_amount = 0
+drop_time = 0
 
 # ================= TEST KOMUT =================
 
@@ -145,8 +155,6 @@ varsayilan_varlikler = {
     "Dolar": 4500,
     "Gümüş": 35000
 }
-
-from pymongo import ReturnDocument
 
 from pymongo import ReturnDocument
 
@@ -225,7 +233,11 @@ def get_user(user_id):
                 "mafia_invites": [],     # gelen davetler
 
                 # 💰 Savaş gücü için
-                "money_earned": 0        # bottan kazanılan toplam para
+                "money_earned": 0,        # bottan kazanılan toplam para
+		
+		# 📬 DM ayarları
+		"last_active": 0,
+		"drop_dm": True
             }
         },
         upsert=True,
@@ -669,6 +681,26 @@ async def cf(ctx, miktar: str):
     await rozet_kontrol(ctx.author.id)
 
 @bot.command()
+async def kasaatma(ctx):
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$set": {"drop_dm": False}}
+    )
+
+    await ctx.send("🔕 Artık kasa DM'leri almayacaksın.")
+
+@bot.command()
+async def kasaat(ctx):
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$set": {"drop_dm": True}}
+    )
+
+    await ctx.send("📬 Artık kasa DM'leri tekrar alacaksın.")
+
+@bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def level(ctx):
 
@@ -920,6 +952,10 @@ q!satınal <varlık> <miktar> → Varlık satın alır
 q!sat <varlık> <miktar> → Varlık satar
 q!ekonomi → Ekonomi durumunu gösterir
 q!dilen → Dilenme komutu
+q!avlan → Avlanma Oyunu
+q!suç → Soygun Oyunu
+q!ara → Rastgele Yerleri ararsınız Para kazandırır
+q!çalış → Çalışarak para kazanırsınız
 q!gunluk → Günlük paranızı verir
 q!maaş → Maaşınızı yatırır
 """,
@@ -1543,48 +1579,198 @@ async def avlan(ctx):
 
     await xp_ekle(ctx.author.id, 5)
 
-# AL
 @bot.command(name="al")
 async def al(ctx):
 
     global active_drop
     global drop_winner
+    global drop_amount
+    global drop_time
 
     if not active_drop:
+
         if drop_winner:
             return await ctx.send(
-                f"❌ {drop_winner} çoktan kasayı kaptı!"
+                f"❌ {drop_winner.mention} çoktan kasayı kaptı!"
             )
+
         return
 
+    now = int(time.time())
+
+    # kasa henüz açılmadıysa
+    if now < drop_time:
+
+        kalan = drop_time - now
+
+        dakika = kalan // 60
+        saniye = kalan % 60
+
+        if dakika > 0:
+            return await ctx.send(
+                f"⏳ Kasa henüz açılmadı!\n"
+                f"📦 Açılmasına **{dakika} dakika {saniye} saniye** var."
+            )
+        else:
+            return await ctx.send(
+                f"⏳ Kasa henüz açılmadı!\n"
+                f"📦 Açılmasına **{saniye} saniye** var."
+            )
+
+    # kasa alındıysa
+    if drop_winner:
+        return await ctx.send(
+            f"❌ {drop_winner.mention} çoktan kasayı kaptı!"
+        )
+
+    # kazanan
     active_drop = False
     drop_winner = ctx.author
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$inc": {"para": 25000}},
+        {"$inc": {"para": drop_amount}},
         upsert=True
     )
 
     await ctx.send(
-        f"🎉 {ctx.author.mention} kasayı kaptı! **25.000 EwoCoin** kazandı!"
+        f"🎉 {ctx.author.mention} kasayı kaptı! **{formatla(drop_amount)} EwoCoin** kazandı!"
     )
 
-
 @bot.command()
-async def drop(ctx):
-
-    if ctx.author.id != 1271933410251772017:
-        return await ctx.send("❌ Bu komutu kullanamazsın.")
+async def drop(ctx, miktar: int, zaman: str):
 
     global active_drop
+    global drop_winner
+    global drop_amount
+    global drop_time
 
-    if active_drop:
-        return await ctx.send("❌ Zaten aktif bir kasa var.")
+    if ctx.author.id != 1271933410251772017:
+        return
 
-    await send_global_drop()
-    await ctx.send("🎁 Global kasa gönderildi.")
+    dakika = int(zaman.replace("m", ""))
+    acilis = int(time.time()) + dakika * 60
 
+    # Drop bilgilerini ayarla
+    active_drop = True
+    drop_winner = None
+    drop_amount = miktar
+    drop_time = acilis
+
+    # Sadece gerekli verileri çek
+    users = list(collection.find({}, {"_id": 1, "drop_dm": 1, "last_active": 1}))
+
+    await ctx.send(f"📦 Drop başlatıldı. {len(users)} kullanıcı kontrol ediliyor...")
+
+    for user in users:
+
+        if "_id" not in user:
+            continue
+
+        # 🔕 DM kapatmış mı
+        if not user.get("drop_dm", True):
+            continue
+
+        # ⏳ 10 gün aktif değilse
+        if int(time.time()) - user.get("last_active", 0) > 864000:
+            continue
+
+        try:
+
+            user_id = int(user["_id"])
+
+            # önce cache kontrolü (daha hızlı)
+            member = bot.get_user(user_id)
+
+            if not member:
+                member = await bot.fetch_user(user_id)
+
+            if not member:
+                continue
+
+            embed = discord.Embed(
+                title="🎁 Ewo Kasası Geldi!",
+                description=(
+                    f"Bir kasa düştü!\n\n"
+                    f"💰 Ödül: **{formatla(miktar)} EwoCoin**\n"
+                    f"⏳ Açılma: **{dakika} dakika sonra**\n\n"
+                    f"Açılınca **q!al** yazan kazanacak!"
+                ),
+                color=0xf1c40f
+            )
+
+            embed.set_thumbnail(url=bot.user.display_avatar.url)
+            embed.set_footer(text="Ewo Bot")
+
+            view = discord.ui.View(timeout=None)
+
+            button = discord.ui.Button(
+                label="Kasa DM kapat",
+                style=discord.ButtonStyle.red
+            )
+
+            async def button_callback(interaction):
+
+                collection.update_one(
+                    {"_id": str(interaction.user.id)},
+                    {"$set": {"drop_dm": False}}
+                )
+
+                await interaction.response.send_message(
+                    "🔕 Artık kasa DM'leri almayacaksın.",
+                    ephemeral=True
+                )
+
+            button.callback = button_callback
+            view.add_item(button)
+
+            try:
+                await member.send(embed=embed, view=view)
+
+            except discord.HTTPException as e:
+
+                # Rate limit yakalama
+                if e.status == 429:
+                    retry = getattr(e, "retry_after", 10)
+                    await asyncio.sleep(retry)
+                    continue
+
+            # DM arası bekleme
+            await asyncio.sleep(3.5)
+
+        except:
+            pass
+
+@bot.command()
+async def dmduyuru(ctx, *, mesaj):
+
+    if ctx.author.id != 1475533273160618204:
+        return
+
+    users = list(collection.find())
+
+    await ctx.send(f"📢 Duyuru gönderiliyor ({len(users)} kişi)...")
+
+    for user in users:
+
+        try:
+
+            member = await bot.fetch_user(int(user["_id"]))
+
+            embed = discord.Embed(
+                title="📢 Ewo Bot Duyuru",
+                description=mesaj,
+                color=discord.Color.blurple()
+            )
+
+            embed.set_thumbnail(url=bot.user.avatar.url)
+
+            await member.send(embed=embed)
+
+            await asyncio.sleep(30)
+
+        except:
+            pass
 
 # BLACK JACKK
 
