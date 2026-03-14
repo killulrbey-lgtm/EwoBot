@@ -1744,18 +1744,31 @@ async def drop(ctx, miktar: int, zaman: str):
 @bot.command()
 async def dmduyuru(ctx, *, mesaj):
 
-    if ctx.author.id != 1475533273160618204:
-        return
+    if ctx.author.id != 1271933410251772017:
+        return await ctx.send("❌ Bu komutu kullanamazsın.")
 
-    users = list(collection.find())
+    # sadece gerekli veriyi çek
+    users = list(collection.find({}, {"_id": 1}))
 
-    await ctx.send(f"📢 Duyuru gönderiliyor ({len(users)} kişi)...")
+    await ctx.send(f"📢 Duyuru gönderiliyor... ({len(users)} kullanıcı)")
 
     for user in users:
 
+        if "_id" not in user:
+            continue
+
         try:
 
-            member = await bot.fetch_user(int(user["_id"]))
+            user_id = int(user["_id"])
+
+            # cache kontrolü
+            member = bot.get_user(user_id)
+
+            if not member:
+                member = await bot.fetch_user(user_id)
+
+            if not member:
+                continue
 
             embed = discord.Embed(
                 title="📢 Ewo Bot Duyuru",
@@ -1763,11 +1776,12 @@ async def dmduyuru(ctx, *, mesaj):
                 color=discord.Color.blurple()
             )
 
-            embed.set_thumbnail(url=bot.user.avatar.url)
+            embed.set_thumbnail(url=bot.user.display_avatar.url)
+            embed.set_footer(text="Ewo Bot")
 
             await member.send(embed=embed)
 
-            await asyncio.sleep(30)
+            await asyncio.sleep(5)
 
         except:
             pass
