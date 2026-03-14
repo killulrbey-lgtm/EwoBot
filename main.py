@@ -1147,6 +1147,8 @@ Aşağıdan bir kategori seçerek komutları görebilirsin.
 `q!szenginler`
 `q!düello`
 `q!rank`
+`q!kasaatma`
+`q!kasaat`
 `q!gdüellocular`
 `q!sdüellocular`
 `q!baskın`
@@ -1767,6 +1769,7 @@ async def al(ctx):
     await ctx.send(
         f"🎉 {ctx.author.mention} kasayı kaptı! **{formatla(drop_amount)} EwoCoin** kazandı!"
     )
+
 # drop
 @bot.command()
 async def drop(ctx, miktar: int, zaman: str):
@@ -1833,7 +1836,9 @@ async def drop(ctx, miktar: int, zaman: str):
             )
 
             embed.set_thumbnail(url=bot.user.display_avatar.url)
-            embed.set_footer(text="Kasa Dm Kapat butonuna bastıysanız Kasa düştüğünde bot size dm gelmeyecek.  "q!kasaat" yazdığınızda bot size dm gelmeye devam edecek")
+            embed.set_footer(
+                text="🔕 Kasa DM almak istemiyorsan butona bas. Tekrar açmak için: q!kasaat"
+            )
 
             view = discord.ui.View(timeout=None)
 
