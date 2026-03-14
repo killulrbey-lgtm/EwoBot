@@ -11,6 +11,7 @@ import pymongo
 from collections import defaultdict
 import uuid
 import time
+from discord.ui import View, Select
 
 # ================= MONGO =================
 
@@ -938,221 +939,266 @@ async def bankayatır(ctx, miktar: int):
 
 from discord.ui import View, Button
 
+class HelpMenu(View):
+
+    def __init__(self, author):
+        super().__init__(timeout=180)
+        self.author = author
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user != self.author:
+            await interaction.response.send_message(
+                "❌ Bu menüyü sadece komutu kullanan kişi kullanabilir.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+
+class HelpSelect(Select):
+
+    def __init__(self):
+
+        options = [
+
+            discord.SelectOption(label="Ana Menü", emoji="📚"),
+            discord.SelectOption(label="Ekonomi", emoji="💰"),
+            discord.SelectOption(label="Kumar", emoji="🎲"),
+            discord.SelectOption(label="Banka", emoji="🏦"),
+            discord.SelectOption(label="Meslek", emoji="💼"),
+            discord.SelectOption(label="İşletme", emoji="🏭"),
+            discord.SelectOption(label="Mafya", emoji="🕶️"),
+            discord.SelectOption(label="Diğer", emoji="📊"),
+            discord.SelectOption(label="Moderasyon", emoji="🛠️"),
+        ]
+
+        super().__init__(
+            placeholder="Kategori seç...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+
+        secim = self.values[0]
+
+        if secim == "Ana Menü":
+
+            embed = discord.Embed(
+                title="📚 EwoBot Yardım Menüsü",
+                description="""
+Aşağıdan bir kategori seçerek komutları görebilirsin.
+
+💰 Ekonomi  
+🎲 Kumar  
+🏦 Banka  
+💼 Meslek  
+🏭 İşletme  
+🕶️ Mafya  
+📊 Diğer  
+🛠️ Moderasyon
+""",
+                color=0x5865F2
+            )
+
+        elif secim == "Ekonomi":
+
+            embed = discord.Embed(
+                title="💰 Ekonomi Komutları",
+                color=0x2ecc71
+            )
+
+            embed.add_field(
+                name="💳 Hesap",
+                value="""
+`q!param`
+`q!paragönder @kişi miktar`
+`q!hesap`
+`q!level`
+""",
+                inline=False
+            )
+
+            embed.add_field(
+                name="💼 Para Kazanma",
+                value="""
+`q!dilen`
+`q!avlan`
+`q!suç`
+`q!ara`
+`q!çalış`
+`q!gunluk`
+`q!maaş`
+""",
+                inline=False
+            )
+
+            embed.add_field(
+                name="📊 Ekonomi",
+                value="""
+`q!satınal`
+`q!sat`
+`q!ekonomi`
+""",
+                inline=False
+            )
+
+        elif secim == "Kumar":
+
+            embed = discord.Embed(
+                title="🎲 Kumar Komutları",
+                color=0xe74c3c
+            )
+
+            embed.description = """
+`q!cf miktar`
+`q!balıktut`
+`q!zar miktar`
+`q!yuksekdusuk miktar`
+`q!slot miktar`
+`q!blackjack miktar`
+"""
+
+        elif secim == "Banka":
+
+            embed = discord.Embed(
+                title="🏦 Banka Komutları",
+                color=0xf1c40f
+            )
+
+            embed.description = """
+`q!banka`
+`q!bankayatır miktar`
+`q!bankaçek miktar`
+"""
+
+        elif secim == "Meslek":
+
+            embed = discord.Embed(
+                title="💼 Meslek Komutları",
+                color=0x9b59b6
+            )
+
+            embed.description = """
+`q!meslekler`
+`q!meslek al <meslek>`
+"""
+
+        elif secim == "İşletme":
+
+            embed = discord.Embed(
+                title="🏭 İşletme Komutları",
+                color=0x1abc9c
+            )
+
+            embed.description = """
+`q!işletmeler`
+`q!işletmeal <isim> <miktar>`
+`q!işletmeyükselt <isim>`
+`q!işletmeparaçek`
+`q!işletmetop`
+`q!sigorta`
+"""
+
+        elif secim == "Mafya":
+
+            embed = discord.Embed(
+                title="🕶️ Mafya Komutları",
+                color=0x2c3e50
+            )
+
+            embed.description = """
+`q!mafyakur <isim>`
+`q!mafyabilgi`
+`q!mafyadavet`
+`q!mafyakabul`
+`q!mafyam`
+`q!mafyaayrıl`
+`q!mafyayatır`
+`q!mafyacek`
+`q!gmafyalar`
+`q!smafyalar`
+`q!mafyadevret`
+
+**Rol Sistemi**
+`q!mafyarolleri`
+`q!rololustur`
+`q!rolkaldir`
+`q!roldegistir`
+`q!yöneticiver`
+`q!yöneticikaldir`
+`q!mafyarol`
+`q!mafyalistesi`
+
+**Savaş**
+`q!mafyabaskın`
+"""
+
+        elif secim == "Diğer":
+
+            embed = discord.Embed(
+                title="📊 Diğer Komutlar",
+                color=0x3498db
+            )
+
+            embed.description = """
+`q!gzenginler`
+`q!szenginler`
+`q!düello`
+`q!rank`
+`q!gdüellocular`
+`q!sdüellocular`
+`q!baskın`
+`q!soygun`
+`q!enflasyon`
+`q!kasaaç`
+`q!market`
+`q!envanter`
+`q!evlen`
+`q!boşan`
+`q!göreval`
+`q!görevler`
+`q!rozetler`
+`q!rozetlerim`
+`q!hesaprozetekle`
+`q!davet`
+"""
+
+        elif secim == "Moderasyon":
+
+            embed = discord.Embed(
+                title="🛠️ Sunucu Moderasyon",
+                color=0xe67e22
+            )
+
+            embed.description = """
+`q!komutkapat`
+`q!komutaç`
+`q!prefix <yeni>`
+`q!prefixsifirla`
+"""
+
+        embed.set_footer(text="EwoBot Yardım Menüsü")
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
+
+
 @bot.command()
-@commands.cooldown(1, 4, commands.BucketType.user)
 async def yardım(ctx):
 
-    ekonomi_embed = discord.Embed(
-        title="💰 Ekonomi Komutları",
-        description="""
-q!param → Paranızı gösterir
-q!paragönder @kişi miktar → Para gönderir
-q!hesap → Hesap bilgilerinizi gösterir
-q!level → Hesap Levelinizi gösterir
-q!satınal <varlık> <miktar> → Varlık satın alır
-q!sat <varlık> <miktar> → Varlık satar
-q!ekonomi → Ekonomi durumunu gösterir
-q!dilen → Dilenme komutu
-q!avlan → Avlanma Oyunu
-q!suç → Soygun Oyunu
-q!ara → Rastgele Yerleri ararsınız Para kazandırır
-q!çalış → Çalışarak para kazanırsınız
-q!gunluk → Günlük paranızı verir
-q!maaş → Maaşınızı yatırır
-""",
-        color=discord.Color.green()
+    embed = discord.Embed(
+        title="📚 EwoBot Yardım Menüsü",
+        description="Aşağıdaki menüden kategori seç.",
+        color=0x5865F2
     )
 
-    kumar_embed = discord.Embed(
-        title="🎲 Kumar Komutları",
-        description="""
-q!cf miktar → Yazı tura
-q!balıktut → Balık Oyunu
-q!zar miktar → Zar atmaca
-q!yuksekdusuk miktar yuksek&dusuk → Sayı bilmece 
-q!slot miktar → Slot oyunu
-q!blackjack miktar → Blackjack oyunu
-""",
-        color=discord.Color.red()
-    )
+    view = HelpMenu(ctx.author)
+    view.add_item(HelpSelect())
 
-    banka_embed = discord.Embed(
-        title="🏦 Banka Komutları",
-        description="""
-q!banka → Banka hesabını gösterir
-q!bankayatır miktar → Bankaya para yatır
-q!bankaçek miktar → Bankadan para çek
-""",
-        color=discord.Color.gold()
-    )
+    await ctx.send(embed=embed, view=view)
 
-    meslek_embed = discord.Embed(
-        title="💼 Meslek Komutları",
-        description="""
-q!meslekler → Meslekleri listeler
-q!meslek al <meslek> → Meslek satın al
-""",
-        color=discord.Color.purple()
-    )
-
-    isletme_embed = discord.Embed(
-        title="🏭 İşletme Komutları",
-        description="""
-q!işletmeler → Tüm işletmeleri gösterir
-q!işletmeal <isim> <miktar> → İşletme satın al
-q!işletmeyükselt <isim> → İşletmeni yükselt
-q!işletmeparaçek → Biriken geliri toplar
-q!işletmetop → Global en büyük sanayiciler
-q!sigorta → 24 saatlik sigorta al
-""",
-        color=discord.Color.dark_teal()
-    )
-
-    diger_embed = discord.Embed(
-        title="📊 Diğer Komutlar",
-        description="""
-q!gzenginler → Global en zenginler
-q!szenginler → Sunucudaki en zenginler
-q!düello @kullanıcı <bahis> → Başka kullanıcılarla düello yaparsınız
-q!rank → Düello rankınızı gösterir
-q!gdüellocular → En fazla WİN'e sahip 10 kişiyi sıralar
-q!sdüellocular → Sunucuda En fazla WİN'e sahip 10 kişiyi sıralar
-q!baskın → Başka kullanıcının İşletme gelirini soyar
-q!soygun → Başka kullanıcıyı soygun yap
-q!enflasyon → Toplam EwoCoin miktarı
-q!kasaaç <Kasaadi> → Kasa açar
-q!market → Marketi gösterir
-q!envanter → Envanteri gösterir
-q!evlen @kullanıcı → Evlilik teklifi gönderir
-q!boşan → Evliliği bitirir (evli olduğu kişiye servetinin %5'i tazminat öder)
-q!göreval → Rastgele zor görev alır
-q!görevler → Aktif görevini gösterir
-q!rozetler → Tüm rozetleri ve kazanma şartlarını gösterir
-q!rozetlerim → Sahip olduğun rozetleri gösterir
-q!hesaprozetekle <rozet adı> → Hesapta görünecek rozeti seçer
-q!davet → Botu sunucuna ekle
-""",
-        color=discord.Color.blurple()
-    )
-
-    mafia_embed = discord.Embed(
-        title="🕶️ Mafya Komutları",
-        description="""
-q!mafyakur <Mafyaismi>
-Mafya kurmanızı sağlar (1M EwoCoin ve 5+ Level gerekir)
-q!mafyabilgi
-Bulunduğun mafya hakkında bilgi verir
-q!mafyadavet
-Mafya lideri oyuncu davet eder
-q!mafyakabul
-Mafya davetini kabul edersin
-q!mafyam
-Mafyan hakkında bilgi verir ve yükseltme yaparsın
-q!mafyaayrıl
-Mafyadan ayrılırsın (lider ayrılırsa rastgele lider seçilir)
-q!mafyayatır <miktar>
-Mafya kasasına para yatırır
-q!mafyacek <miktar>
-Mafya kasasından para çeker (lider)
-q!gmafyalar
-Global en iyi mafyalar
-q!smafyalar
-Sunucudaki en iyi mafyalar
-q!mafyadevret @kullanıcı
-Mafyanı başkasına devreder
-q!mafyarolleri
-Mafya grubunun rollerini listeler
-q!rololustur <rolismi> <rank>
-Mafya grubunda yeni rol oluşturur
-q!rolkaldir <rolismi>
-Mafya grubundaki rolü siler
-q!roldegistir @kullanıcı <rolismi>
-Mafya üyesinin rolünü değiştirir
-q!yöneticiver <rolismi>
-Mafya grubundaki role yönetici verir
-q!yöneticikaldir <rolismi>
-Mafya grubundaki rolün yöneticisini alır
-q!mafyarol
-Mafya rolünü gösterir
-q!mafyalistesi 
-Bulunduğun mafyadaki üyeleri listeler
-q!mafyabaskın <mafya>
-Başka mafyanın kasasını soymaya çalışır
-""",
-        color=discord.Color.dark_gray()
-   )
-
-    # 🔥 YENİ EKLENEN EMBED
-    yetkili_embed = discord.Embed(
-        title="🛠️ Moderasyon Komutları (Botu Sunucusuna ekleyen yöneticiler için)",
-        description="""
-q!komutkapat → Bulunduğun kanalda bot komutlarını kapatır
-q!komutaç → Bulunduğun kanalda bot komutlarını açar
-q!prefix <yeni> → Sunucu prefixini değiştirir
-q!prefixsifirla → Prefixi varsayılana döndürür
-""",
-        color=discord.Color.orange()
-    )
-
-    for e in [ekonomi_embed, kumar_embed, banka_embed, meslek_embed, isletme_embed, diger_embed, yetkili_embed, mafia_embed]:
-        e.set_footer(text="EwoBot Yardım Menüsü")
-
-    view = View(timeout=None)
-
-    ekonomi_button = Button(label="💰 Ekonomi", style=discord.ButtonStyle.green)
-    kumar_button = Button(label="🎲 Kumar", style=discord.ButtonStyle.red)
-    banka_button = Button(label="🏦 Banka", style=discord.ButtonStyle.blurple)
-    meslek_button = Button(label="💼 Meslek", style=discord.ButtonStyle.gray)
-    isletme_button = Button(label="🏭 İşletmeler", style=discord.ButtonStyle.green)
-    diger_button = Button(label="📊 Diğer", style=discord.ButtonStyle.blurple)
-    mafia_button = Button(label="🕶️ Mafya", style=discord.ButtonStyle.secondary)
-    yetkili_button = Button(label="🛠️ Sunucu Moderasyon", style=discord.ButtonStyle.danger)
-
-    async def ekonomi_callback(interaction):
-        await interaction.response.edit_message(embed=ekonomi_embed, view=view)
-
-    async def kumar_callback(interaction):
-        await interaction.response.edit_message(embed=kumar_embed, view=view)
-
-    async def banka_callback(interaction):
-        await interaction.response.edit_message(embed=banka_embed, view=view)
-
-    async def meslek_callback(interaction):
-        await interaction.response.edit_message(embed=meslek_embed, view=view)
-
-    async def isletme_callback(interaction):
-        await interaction.response.edit_message(embed=isletme_embed, view=view)
-
-    async def diger_callback(interaction):
-        await interaction.response.edit_message(embed=diger_embed, view=view)
-
-    async def mafia_callback(interaction):
-        await interaction.response.edit_message(embed=mafia_embed, view=view)
-
-    async def yetkili_callback(interaction):
-        await interaction.response.edit_message(embed=yetkili_embed, view=view)
-
-    ekonomi_button.callback = ekonomi_callback
-    kumar_button.callback = kumar_callback
-    banka_button.callback = banka_callback
-    meslek_button.callback = meslek_callback
-    isletme_button.callback = isletme_callback
-    diger_button.callback = diger_callback
-    mafia_button.callback = mafia_callback
-    yetkili_button.callback = yetkili_callback
-
-    view.add_item(ekonomi_button)
-    view.add_item(kumar_button)
-    view.add_item(banka_button)
-    view.add_item(meslek_button)
-    view.add_item(isletme_button)
-    view.add_item(diger_button)
-    view.add_item(mafia_button)
-    view.add_item(yetkili_button)
-
-    await ctx.send(embed=ekonomi_embed, view=view)
-
-# Meslek ve fiyatları tanımla
+# Meslek ve fiyatları
 meslekler = {
 
     "Kripto Milyarderi": {"fiyat": 10_500_000, "maas": 185_000},
@@ -1180,15 +1226,81 @@ meslekler = {
     "Seyyar Satıcı": {"fiyat": 10_000, "maas": 8_000},
 }
 
-# Meslekleri listele
+# Meslekleri ikiye böl
+meslek_list = list(meslekler.items())
+yarisi = len(meslek_list) // 2
+
+meslek_sayfa1 = meslek_list[:yarisi]
+meslek_sayfa2 = meslek_list[yarisi:]
+
+
+def meslek_embed_olustur(sayfa):
+
+    embed = discord.Embed(
+        title="💼 Mevcut Meslekler",
+        color=discord.Color.purple()
+    )
+
+    if sayfa == 1:
+        data = meslek_sayfa1
+    else:
+        data = meslek_sayfa2
+
+    for isim, veri in data:
+
+        embed.add_field(
+            name=isim,
+            value=f"Fiyat: {veri['fiyat']} EwoCoin\nGünlük Maaş: {veri['maas']} EwoCoin",
+            inline=False
+        )
+
+    embed.set_footer(text=f"Sayfa {sayfa}/2 • qmeslek al <meslek>")
+
+    return embed
+
+
+class MeslekView(View):
+
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+
+    async def interaction_check(self, interaction: discord.Interaction):
+
+        if interaction.user != self.author:
+            await interaction.response.send_message(
+                "❌ Bu menüyü sadece komutu kullanan kişi kullanabilir.",
+                ephemeral=True
+            )
+            return False
+
+        return True
+
+    @discord.ui.button(label="⬅️ Sayfa 1", style=discord.ButtonStyle.primary)
+    async def sayfa1(self, interaction: discord.Interaction, button: Button):
+
+        await interaction.response.edit_message(
+            embed=meslek_embed_olustur(1),
+            view=self
+        )
+
+    @discord.ui.button(label="➡️ Sayfa 2", style=discord.ButtonStyle.primary)
+    async def sayfa2(self, interaction: discord.Interaction, button: Button):
+
+        await interaction.response.edit_message(
+            embed=meslek_embed_olustur(2),
+            view=self
+        )
+
+
 @bot.command(name="meslekler")
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def meslekler_cmd(ctx):
-    embed = discord.Embed(title="💼 Mevcut Meslekler", color=discord.Color.purple())
-    for isim, veri in meslekler.items():
-        embed.add_field(name=isim, value=f"Fiyat: {veri['fiyat']} EwoCoin\nGünlük Maaş: {veri['maas']} EwoCoin", inline=False)
-    embed.set_footer(text="q!meslek al <meslek> ile meslek alabilirsiniz")
-    await ctx.send(embed=embed)
+
+    await ctx.send(
+        embed=meslek_embed_olustur(1),
+        view=MeslekView(ctx.author)
+    )
 
 # Meslek satın alma
 @bot.command(name="meslek")
