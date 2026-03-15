@@ -236,6 +236,8 @@ def get_user(user_id):
 
                 # 💰 Savaş gücü için
                 "money_earned": 0,        # bottan kazanılan toplam para
+
+		"premium_until": 0,
 		
 		# 📬 DM ayarları
 		"last_active": 0,
@@ -1713,6 +1715,7 @@ async def avlan(ctx):
     await xp_ekle(ctx.author.id, 5)
 
 @bot.command(name="al")
+@commands.cooldown(1, 5, commands.BucketType.user)
 async def al(ctx):
 
     global active_drop
@@ -5139,11 +5142,14 @@ async def global_kanal_kontrol(ctx):
     if ctx.author.id == BOT_OWNER_ID:
         return True
 
-    # DM'de serbest
+    # DM serbest
     if not ctx.guild:
         return True
 
+    # Kanal kilitliyse sadece komutaç çalışsın
     if await kanal_kilitli_mi(ctx.guild.id, ctx.channel.id):
+        if ctx.command.name == "komutaç":
+            return True
         return False
 
     return True
@@ -5516,6 +5522,114 @@ async def mafyadavet(ctx, member: discord.Member):
 
     mafia = mafia_col.find_one({"_id": user["mafia_id"]})
 
+    if len(mafia["members"]) >= mafia["capacity"]:
+        return await ctx.send("❌ Mafya dolu.")
+
+    mafia_invites.update_one(
+        {"user": str(member.id)},
+        {"$addToSet": {"invites": mafia["_id"]}},
+        upsert=True
+    )
+
+    await ctx.send(f"📨 {member.mention} mafyaya davet edildi.")
+
+@bot.command(name="mafyaat")
+async def mafyaat(ctx, member: discord.Member):
+
+    if member.id == ctx.author.id:
+        return await ctx.send("❌ Kendini atamazsın.")
+
+    user = get_user(ctx.author.id)
+    target = get_user(member.id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Mafyada değilsin.")
+
+    if user.get("mafia_id") != target.get("mafia_id"):
+        return await ctx.send("❌ Aynı mafyada değilsiniz.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    if target.get("mafia_role") == "leader":
+        return await ctx.send("❌ Lideri atamazsın.")
+
+    roles = mafia["roles"]
+
+    giver_role = next(
+        (r for r in roles if r["name"] == user.get("mafia_custom_role")),
+        None
+    )
+
+    target_role = next(
+        (r for r in roles if r["name"] == target.get("mafia_custom_role")),
+        None
+    )
+
+    # Lider herkesi atabilir
+    if user.get("mafia_role") != "leader":
+
+        if not giver_role or not giver_role["manager"]:
+            return await ctx.send("❌ Üye atma yetkin yok.")
+
+        if not target_role:
+            return await ctx.send("❌ Hedef rol bulunamadı.")
+
+        if giver_role["rank"] <= target_role["rank"]:
+            return await ctx.send("❌ Kendinden yüksek veya eşit rolü atamazsın.")
+
+    mafia_col.update_one(
+        {"_id": mafia["_id"]},
+        {"$pull": {"members": str(member.id)}}
+    )
+
+    collection.update_one(
+        {"_id": str(member.id)},
+        {
+            "$set": {
+                "mafia_id": None,
+                "mafia_role": None,
+                "mafia_custom_role": "Mafya Üyesi"
+            }
+        }
+    )
+
+    await ctx.send(f"🚫 {member.mention} mafyadan atıldı.")
+
+@bot.command()
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def mafyadavet(ctx, member: discord.Member):
+
+    user_id = str(ctx.author.id)
+    user = get_user(user_id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Bir mafyada değilsin.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    if not mafia:
+        return await ctx.send("❌ Mafya bulunamadı.")
+
+    # davet edilen kişi zaten mafyada mı
+    target = get_user(member.id)
+
+    if target.get("mafia_id"):
+        return await ctx.send("❌ Bu kullanıcı zaten bir mafyada.")
+
+    # rol listesi
+    roles = mafia["roles"]
+
+    user_role = next(
+        (r for r in roles if r["name"] == user.get("mafia_custom_role")),
+        None
+    )
+
+    # yetki kontrolü
+    if user.get("mafia_role") != "leader":
+        if not user_role or not user_role.get("manager"):
+            return await ctx.send("❌ Davet etme yetkin yok.")
+
+    # kapasite kontrol
     if len(mafia["members"]) >= mafia["capacity"]:
         return await ctx.send("❌ Mafya dolu.")
 
@@ -6265,6 +6379,79 @@ async def mafyarol(ctx):
     embed.add_field(name="Yönetici Yetkisi", value=manager)
 
     await ctx.send(embed=embed)
+
+@bot.command(name="rolisimdegistir")
+async def rolisimdegistir(ctx, eski_rol, *, yeni_rol):
+
+    user = get_user(ctx.author.id)
+
+    if user.get("mafia_role") != "leader":
+        return await ctx.send("❌ Sadece lider rol isimlerini değiştirebilir.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    for r in mafia["roles"]:
+
+        if r["name"].lower() == eski_rol.lower():
+
+            mafia_col.update_one(
+                {"_id": mafia["_id"], "roles.name": r["name"]},
+                {"$set": {"roles.$.name": yeni_rol}}
+            )
+
+            # kullanıcıların rolünü de güncelle
+            collection.update_many(
+                {"mafia_id": mafia["_id"], "mafia_custom_role": r["name"]},
+                {"$set": {"mafia_custom_role": yeni_rol}}
+            )
+
+            return await ctx.send(f"✅ **{eski_rol}** rolünün adı **{yeni_rol}** olarak değiştirildi.")
+
+    await ctx.send("❌ Rol bulunamadı.")
+
+@bot.command()
+async def premiumver(ctx, member: discord.Member, gun: int):
+
+    if ctx.author.id != BOT_OWNER_ID:
+        return
+
+    sure = int(time.time()) + (gun * 86400)
+
+    collection.update_one(
+        {"_id": str(member.id)},
+        {"$set": {"premium_until": sure}},
+        upsert=True
+    )
+
+    await ctx.send(f"⭐ {member.mention} kullanıcısına **{gun} gün premium** verildi.")
+
+@bot.command()
+async def premium(ctx):
+
+    user = get_user(ctx.author.id)
+
+    if not is_premium(user):
+        return await ctx.send("❌ Premiumun yok.")
+
+    kalan = user["premium_until"] - int(time.time())
+
+    gun = kalan // 86400
+    saat = (kalan % 86400) // 3600
+
+    await ctx.send(f"⭐ Premium süren: **{gun} gün {saat} saat**")
+
+@bot.command()
+async def premiumfix(ctx):
+
+    if ctx.author.id != BOT_OWNER_ID:
+        return
+
+    result = collection.update_many(
+        {"premium_until": {"$exists": False}},
+        {"$set": {"premium_until": 0}}
+    )
+
+    await ctx.send(f"✅ {result.modified_count} kullanıcıya premium alanı eklendi.")
 
 # =====================================================
 # DUEL TIMEOUT LOOP
