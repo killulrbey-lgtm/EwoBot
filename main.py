@@ -6413,19 +6413,6 @@ async def premium(ctx):
 
     await ctx.send(f"⭐ Premium süren: **{gun} gün {saat} saat**")
 
-@bot.command()
-async def premiumfix(ctx):
-
-    if ctx.author.id != BOT_OWNER_ID:
-        return
-
-    result = collection.update_many(
-        {"premium_until": {"$exists": False}},
-        {"$set": {"premium_until": 0}}
-    )
-
-    await ctx.send(f"✅ {result.modified_count} kullanıcıya premium alanı eklendi.")
-
 # =====================================================
 # DUEL TIMEOUT LOOP
 # =====================================================
