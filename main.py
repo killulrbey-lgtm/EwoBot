@@ -533,6 +533,9 @@ def hesapla_win_chance(user):
 
     return win_chance
 
+def is_premium(user):
+    return user.get("premium_until", 0) > int(time.time())
+
 def get_rank_name(point):
     if point < 100:
         return "Bronz"
@@ -6398,15 +6401,18 @@ async def premiumver(ctx, member: discord.Member, gun: int):
 
     await ctx.send(f"⭐ {member.mention} kullanıcısına **{gun} gün premium** verildi.")
 
+
 @bot.command()
 async def premium(ctx):
 
     user = get_user(ctx.author.id)
 
-    if not is_premium(user):
+    premium_until = user.get("premium_until", 0)
+
+    if premium_until <= int(time.time()):
         return await ctx.send("❌ Premiumun yok.")
 
-    kalan = user["premium_until"] - int(time.time())
+    kalan = premium_until - int(time.time())
 
     gun = kalan // 86400
     saat = (kalan % 86400) // 3600
