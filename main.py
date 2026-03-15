@@ -417,7 +417,7 @@ ROZETLER = {
     "Slotçu II": "200 slot oynayın",
     "Blackjackçi": "50 blackjack oynayın",
 
-    "Premium Üye": "Premium üyelik satın al"
+    "Premium Üye": "Premium üyelik satın al",
 
     "Zengin I": "100.000 kazan",
     "Zengin II": "1.000.000 kazan",
