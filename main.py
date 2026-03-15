@@ -5506,33 +5506,6 @@ async def mafya_bilgi(ctx):
 
     await ctx.send(embed=embed)
 
-# =========================
-# MAFYA DAVET
-# =========================
-
-@bot.command()
-@commands.cooldown(1, 5, commands.BucketType.user)
-async def mafyadavet(ctx, member: discord.Member):
-
-    user_id = str(ctx.author.id)
-    user = get_user(user_id)
-
-    if user.get("mafia_role") != "leader":
-        return await ctx.send("❌ Sadece lider davet edebilir.")
-
-    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
-
-    if len(mafia["members"]) >= mafia["capacity"]:
-        return await ctx.send("❌ Mafya dolu.")
-
-    mafia_invites.update_one(
-        {"user": str(member.id)},
-        {"$addToSet": {"invites": mafia["_id"]}},
-        upsert=True
-    )
-
-    await ctx.send(f"📨 {member.mention} mafyaya davet edildi.")
-
 @bot.command(name="mafyaat")
 async def mafyaat(ctx, member: discord.Member):
 
