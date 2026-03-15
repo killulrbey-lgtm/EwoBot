@@ -290,19 +290,66 @@ async def xp_ekle(user_id, miktar):
 
     user = get_user(user_id)
 
+    # ⭐ Premium ise 2x XP
+    if is_premium(user):
+        miktar *= 2
+
     xp = int(user.get("xp", 0))
     level = int(user.get("level", 1))
 
     xp += miktar
 
+    level_up = False
+
     while xp >= level * 100:
         xp -= level * 100
         level += 1
+        level_up = True
 
     collection.update_one(
         {"_id": str(user_id)},
         {"$set": {"xp": xp, "level": level}}
     )
+
+    # ⭐ Level ödülleri (sadece premium)
+    if level_up and is_premium(user):
+
+        if level == 5:
+            collection.update_one(
+                {"_id": str(user_id)},
+                {"$inc": {"para": 15000}}
+            )
+
+        elif level == 10:
+            collection.update_one(
+                {"_id": str(user_id)},
+                {"$inc": {"envanter.Gümüş Kasa": 1}}
+            )
+
+
+        elif level == 15:
+            collection.update_one(
+                {"_id": str(user_id)},
+                {"$inc": {"para": 20000}}
+            )
+
+        elif level == 20:
+            collection.update_one(
+                {"_id": str(user_id)},
+                {"$inc": {"envanter.Altın Kasa": 1}}
+            )
+
+        elif level == 20:
+            collection.update_one(
+                {"_id": str(user_id)},
+                {"$inc": {"envanter.Altın Kasa": 2}}
+            )
+
+        elif level == 50:
+            collection.update_one(
+                {"_id": str(user_id)},
+                {"$inc": {"envanter.Premium Kasa": 1}}
+            )
 
 GOREVLER = [
 
@@ -369,6 +416,8 @@ ROZETLER = {
     "Slotçu I": "50 slot oynayın",
     "Slotçu II": "200 slot oynayın",
     "Blackjackçi": "50 blackjack oynayın",
+
+    "Premium Üye": "Premium üyelik satın al"
 
     "Zengin I": "100.000 kazan",
     "Zengin II": "1.000.000 kazan",
@@ -619,14 +668,19 @@ async def paragönder(ctx, member: discord.Member, miktar: int):
     await ctx.send(f"✅ {member.mention} kişisine {formatla(miktar)} EwoCoin gönderildi")
     await xp_ekle(ctx.author.id, 5)
 
-MAX_BET = 100000
+def get_max_bet(user):
+
+    if is_premium(user):
+        return 250000
+
+    return 100000
 
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def cf(ctx, miktar: str):
 
-    MAX_BET = 100000
     user = get_user(ctx.author.id)
+    MAX_BET = get_max_bet(user)
 
     if miktar.lower() == "all":
         miktar = min(user["para"], MAX_BET)
@@ -639,7 +693,7 @@ async def cf(ctx, miktar: str):
         return await ctx.send("❌ Geçerli bir miktar gir.")
 
     if miktar > MAX_BET:
-        return await ctx.send("❌ En fazla 100.000 oynayabilirsin.")
+        return await ctx.send(f"❌ En fazla {formatla(MAX_BET)} oynayabilirsin.")
 
     if user["para"] < miktar:
         return await ctx.send("❌ Paran yetmiyor.")
@@ -765,6 +819,7 @@ async def level(ctx):
 async def slot(ctx, miktar: str):
 
     user = get_user(ctx.author.id)
+    MAX_BET = get_max_bet(user)
 
     if miktar.lower() == "all":
         miktar = min(user["para"], MAX_BET)
@@ -777,7 +832,7 @@ async def slot(ctx, miktar: str):
         return await ctx.send("❌ Geçerli miktar gir.")
 
     if miktar > MAX_BET:
-        return await ctx.send("❌ Maksimum 100.000 oynayabilirsin.")
+        return await ctx.send(f"❌ En fazla {formatla(MAX_BET)} oynayabilirsin.")
 
     if user["para"] < miktar:
         return await ctx.send("❌ Paran yetmiyor.")
@@ -848,7 +903,6 @@ async def maas(ctx):
     await xp_ekle(ctx.author.id, 5)
     await ctx.send(f"💰 Maaşını aldın! +{formatla(maas_miktari)} EwoCoin")
 
-# gunluk 
 @bot.command(name="gunluk")
 async def gunluk(ctx):
 
@@ -865,6 +919,12 @@ async def gunluk(ctx):
     bonus = level * 250
     odul = temel + bonus
 
+    # ⭐ Premium bonus
+    premium_mesaj = ""
+    if is_premium(user):
+        odul = int(odul * 1.5)
+        premium_mesaj = "\n⭐ Premium bonusu: x1.5"
+
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {
@@ -874,7 +934,12 @@ async def gunluk(ctx):
     )
 
     await xp_ekle(ctx.author.id, 10)
-    await ctx.send(f"🎁 Günlük ödülünü aldın! +{formatla(odul)} EwoCoin")
+
+    await ctx.send(
+        f"🎁 Günlük ödülünü aldın!\n"
+        f"💰 +{formatla(odul)} EwoCoin"
+        f"{premium_mesaj}"
+    )
 
 
 
@@ -1032,6 +1097,7 @@ Aşağıdan bir kategori seçerek komutları görebilirsin.
 `q!avlan`
 `q!suç`
 `q!ara`
+`q!balıktut`
 `q!çalış`
 `q!gunluk`
 `q!maaş`
@@ -1058,7 +1124,6 @@ Aşağıdan bir kategori seçerek komutları görebilirsin.
 
             embed.description = """
 `q!cf miktar`
-`q!balıktut`
 `q!zar miktar`
 `q!yuksekdusuk miktar`
 `q!slot miktar`
@@ -2047,8 +2112,8 @@ async def blackjack(ctx, miktar: str = None):
 @commands.cooldown(1, 7, commands.BucketType.user)
 async def zar(ctx, miktar: str):
 
-    MAX_BET = 100000
     user = get_user(ctx.author.id)
+    MAX_BET = get_max_bet(user)
 
     if miktar.lower() == "all":
         miktar = min(user["para"], MAX_BET)
@@ -2061,7 +2126,7 @@ async def zar(ctx, miktar: str):
         return await ctx.send("❌ Geçerli miktar gir.")
 
     if miktar > MAX_BET:
-        return await ctx.send("❌ Maksimum 100.000 oynayabilirsin.")
+        return await ctx.send(f"❌ En fazla {formatla(MAX_BET)} oynayabilirsin.")
 
     if user["para"] < miktar:
         return await ctx.send("❌ Paran yetmiyor.")
@@ -2108,8 +2173,8 @@ async def zar(ctx, miktar: str):
 @commands.cooldown(1, 8, commands.BucketType.user)
 async def yuksekdusuk(ctx, miktar: str, secim: str):
 
-    MAX_BET = 100000
     user = get_user(ctx.author.id)
+    MAX_BET = get_max_bet(user)
 
     secim = secim.lower()
 
@@ -2456,7 +2521,6 @@ async def help(ctx):
 async def gzenginler(ctx):
 
     tum_kullanicilar = collection.find()
-
     liste = []
 
     for user in tum_kullanicilar:
@@ -2467,7 +2531,6 @@ async def gzenginler(ctx):
         if toplam_servet > 0:
             liste.append((user["_id"], toplam_servet))
 
-    # Büyükten küçüğe sırala
     sirali = sorted(liste, key=lambda x: x[1], reverse=True)[:10]
 
     embed = discord.Embed(
@@ -2482,8 +2545,13 @@ async def gzenginler(ctx):
     for i, (user_id, servet) in enumerate(sirali, 1):
         try:
             uye = await bot.fetch_user(int(user_id))
+            user_data = get_user(user_id)
+
+            premium_tag = "⭐ " if is_premium(user_data) else ""
+            crown = "👑 " if i == 1 else ""
+
             embed.add_field(
-                name=f"{i}. {uye.name}",
+                name=f"{crown}{i}. {premium_tag}{uye.name}",
                 value=f"💰 Serveti = {formatla(servet)} EwoCoin",
                 inline=False
             )
@@ -2495,6 +2563,10 @@ async def gzenginler(ctx):
 # =====================================================
 # 🔁 10 DAKİKADA BİR GLOBAL EwoPlusCoin
 # =====================================================
+
+GLOBAL_ZENGINLER_KANAL_ID = 1479627190864838778
+global_zenginler_mesaj_id = None
+
 
 GLOBAL_ZENGINLER_KANAL_ID = 1479627190864838778
 global_zenginler_mesaj_id = None
@@ -2532,17 +2604,22 @@ async def otomatik_gzenginler():
             embed.description = "Henüz veri yok."
         else:
             for i, (user_id, servet) in enumerate(sirali, 1):
-                uye = bot.get_user(int(user_id))  # FETCH YOK!
+
+                uye = bot.get_user(int(user_id))
                 if not uye:
                     continue
 
+                user_data = get_user(user_id)
+
+                premium_tag = "⭐ " if is_premium(user_data) else ""
+                crown = "👑 " if i == 1 else ""
+
                 embed.add_field(
-                    name=f"{i}. {uye.name}",
+                    name=f"{crown}{i}. {premium_tag}{uye.name}",
                     value=f"💰 {formatla(servet)} EwoCoin",
                     inline=False
                 )
 
-        # Mesaj varsa edit
         if global_zenginler_mesaj_id:
             try:
                 mesaj = await kanal.fetch_message(global_zenginler_mesaj_id)
@@ -2551,7 +2628,6 @@ async def otomatik_gzenginler():
             except:
                 global_zenginler_mesaj_id = None
 
-        # Yoksa yeni oluştur
         mesaj = await kanal.send(embed=embed)
         global_zenginler_mesaj_id = mesaj.id
 
@@ -2570,18 +2646,26 @@ async def szenginler(ctx):
     toplam_para = []
 
     for member in ctx.guild.members:
+
         info = collection.find_one({"_id": str(member.id)})
         if not info:
             continue
 
         toplam = info.get("para", 0) + info.get("banka", 0)
-        toplam_para.append((member.name, toplam))
+
+        premium_tag = "⭐ " if is_premium(info) else ""
+
+        toplam_para.append((premium_tag + member.name, toplam))
 
     sirali = sorted(toplam_para, key=lambda x: x[1], reverse=True)[:10]
 
     text = ""
+
     for i, (name, bakiye) in enumerate(sirali, 1):
-        text += f"{i}. {name} - {formatla(bakiye)} EwoCoin\n"
+
+        crown = "👑 " if i == 1 else ""
+
+        text += f"{crown}{i}. {name} - {formatla(bakiye)} EwoCoin\n"
 
     embed = discord.Embed(
         title=f"💰 {ctx.guild.name} En Zenginler",
@@ -5190,14 +5274,12 @@ async def komutaç(ctx):
 async def vergi_sistemi():
 
     simdi = int(time.time())
-
     users = collection.find()
 
     for user in users:
 
         son_vergi = user.get("son_vergi_zamani", 0)
 
-        # 24 saat geçmemişse vergi alma
         if simdi - son_vergi < 86400:
             continue
 
@@ -5220,10 +5302,18 @@ async def vergi_sistemi():
 
         servet = nakit + banka + isletme_degeri
 
-        if servet < 5000000:
+        if servet < 2500000:
             continue
 
-        vergi = int(servet * 0.02)
+        # ⭐ Premium kontrol
+        if is_premium(user):
+            vergi_orani = 0.01
+            premium_mesaj = "\n⭐ Premium olduğunuz için vergi oranı %1 uygulandı."
+        else:
+            vergi_orani = 0.02
+            premium_mesaj = ""
+
+        vergi = int(servet * vergi_orani)
 
         kesilen = 0
         yeni_isletmeler = isletmeler.copy()
@@ -5311,7 +5401,8 @@ async def vergi_sistemi():
                 f"🏦 **EwoBot Vergi Sistemi**\n\n"
                 f"💰 Kesilen Vergi: {formatla(kesilen)}\n"
                 f"📊 Toplam Servet: {formatla(servet)}\n"
-                f"📉 Vergi Oranı: %2\n\n"
+                f"📉 Vergi Oranı: %{int(vergi_orani*100)}"
+                f"{premium_mesaj}\n\n"
                 f"⚠️ Vergi otomatik olarak kesildi."
             )
 
@@ -6395,29 +6486,92 @@ async def premiumver(ctx, member: discord.Member, gun: int):
 
     collection.update_one(
         {"_id": str(member.id)},
-        {"$set": {"premium_until": sure}},
+        {
+            "$set": {"premium_until": sure},
+            "$addToSet": {"rozetler": "Premium Üye"}
+        },
         upsert=True
     )
 
     await ctx.send(f"⭐ {member.mention} kullanıcısına **{gun} gün premium** verildi.")
 
+@tasks.loop(minutes=30)
+async def premium_kontrol():
 
+    simdi = int(time.time())
+
+    users = collection.find({
+        "premium_until": {"$lt": simdi},
+        "rozetler": "Premium Üye"
+    })
+
+    for user in users:
+
+        collection.update_one(
+            {"_id": user["_id"]},
+            {"$pull": {"rozetler": "Premium Üye"}}
+        )
+
+        try:
+            uye = await bot.fetch_user(int(user["_id"]))
+            await uye.send("⭐ Premium süren bitti ve **Premium Üye rozeti** kaldırıldı.")
+        except:
+            pass
 @bot.command()
 async def premium(ctx):
 
     user = get_user(ctx.author.id)
 
+    simdi = int(time.time())
     premium_until = user.get("premium_until", 0)
 
-    if premium_until <= int(time.time()):
-        return await ctx.send("❌ Premiumun yok.")
+    if premium_until <= simdi:
+        return await ctx.send("❌ Premium üyeliğin yok.")
 
-    kalan = premium_until - int(time.time())
+    kalan = premium_until - simdi
 
     gun = kalan // 86400
     saat = (kalan % 86400) // 3600
 
-    await ctx.send(f"⭐ Premium süren: **{gun} gün {saat} saat**")
+    # premium istatistikleri
+    toplam_gun = user.get("premium_total_days", 0)
+    premium_sayisi = user.get("premium_count", 1)
+    seri = user.get("premium_series", 1)
+
+    baslangic = premium_until - (gun * 86400 + saat * 3600)
+
+    embed = discord.Embed(
+        title="⭐ Premium Üyelik Bilgileri",
+        color=discord.Color.gold()
+    )
+
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+
+    embed.add_field(
+        name="⏳ Kalan Süre",
+        value=f"**{gun} gün {saat} saat**",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📅 Premium Bitiş",
+        value=f"<t:{premium_until}:F>",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📊 Premium İstatistikleri",
+        value=(
+            f"💎 Premium Sayısı: **{premium_sayisi}**\n"
+            f"🔥 Premium Serisi: **{seri}. Ay**\n"
+            f"📆 Toplam Premium Gün: **{toplam_gun} gün**"
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text=f"{ctx.author.name} • Premium Kullanıcısı")
+
+    await ctx.send(embed=embed)
 
 # =====================================================
 # DUEL TIMEOUT LOOP
@@ -6564,7 +6718,8 @@ async def on_ready():
         enflasyon_gonder,
         otomatik_ekonomi,
         vergi_sistemi,
-        mafia_board
+        mafia_board,
+	premium_kontrol
     ]
 
     for loop in loops:
