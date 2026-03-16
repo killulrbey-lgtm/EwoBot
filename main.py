@@ -73,6 +73,8 @@ intents.guilds = True
 intents.members = True
 intents.message_content = True
 intents.invites = True  # ÖNEMLİ
+global_cooldowns = {}
+GLOBAL_COOLDOWN = 3
 
 
 active_duels = {}
@@ -375,6 +377,10 @@ async def profil_karti_olustur(ctx, user):
             bg = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
             bg = bg.resize((width, height))
             img.paste(bg, (0,0))
+
+            overlay = Image.new("RGBA", (width, height), (0,0,0,90))
+            img_rgba = img.convert("RGBA")
+            img = Image.alpha_composite(img_rgba, overlay).convert("RGB")
 
         except:
             pass
@@ -771,6 +777,27 @@ async def kanal_kilitli_mi(guild_id, channel_id):
         return False
 
     return channel_id in data.get("disabled_channels", [])
+
+async def global_cooldown_check(ctx):
+
+    user_id = ctx.author.id
+    now = time.time()
+
+    last = global_cooldowns.get(user_id, 0)
+
+    if now - last < GLOBAL_COOLDOWN:
+
+        kalan = round(GLOBAL_COOLDOWN - (now - last))
+
+        await ctx.send(
+            f"⏳ Komutları çok hızlı kullanıyorsun. **{kalan} saniye** beklemelisin.",
+            delete_after=kalan
+        )
+
+        return False
+
+    global_cooldowns[user_id] = now
+    return True
 
 def global_toplam_para():
     pipeline = [
@@ -1202,7 +1229,7 @@ async def gunluk(ctx):
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def banka(ctx):
     user = get_user(ctx.author.id)
-    faiz = int(user["banka"] * 0.05)  # %5 günlük faiz
+    faiz = min(int(user["banka"] * 0.05), 500000)
 
     embed = discord.Embed(
         title="🏦 EwoBank Hesabı",
@@ -1259,6 +1286,32 @@ async def bankayatır(ctx, miktar: int):
 
     await ctx.send(f"🏦 {ctx.author.mention}, bankaya {formatla(miktar)} EwoCoin yatırdınız")
 
+@bot.command()
+@commands.cooldown(1, 86400, commands.BucketType.user)
+async def faiz(ctx):
+
+    user = get_user(ctx.author.id)
+
+    banka = user.get("banka", 0)
+
+    if banka <= 0:
+        return await ctx.send("❌ Bankanda para olmadığı için faiz alamazsın.")
+
+    faiz = int(banka * 0.05)
+
+    # Maks faiz limiti
+    if faiz > 500000:
+        faiz = 500000
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"banka": faiz}}
+    )
+
+    await ctx.send(
+        f"🏦 {ctx.author.mention}, günlük faizini aldın!\n"
+        f"💰 Kazanç: **{formatla(faiz)} EwoCoin**"
+    )
 from discord.ui import View, Button
 
 class YorumModal(discord.ui.Modal, title="Öneriye Yorum Yap"):
@@ -1420,6 +1473,8 @@ Aşağıdan bir kategori seçerek komutları görebilirsin.
 `q!çalış`
 `q!gunluk`
 `q!maaş`
+`q!faiz`
+
 """,
                 inline=False
             )
@@ -1546,6 +1601,7 @@ Aşağıdan bir kategori seçerek komutları görebilirsin.
 `q!baskın`
 `q!soygun`
 `q!enflasyon`
+`q!hesaparkaplan <dosya yapıştır>`
 `q!kasaaç`
 `q!market`
 `q!envanter`
@@ -1736,7 +1792,7 @@ LOG_GUILD = 1471843922115301493
 LOG_CHANNEL = 1483051326840635442
 
 @bot.command()
-async def qhesaparkaplan(ctx):
+async def hesaparkaplan(ctx):
 
     user = get_user(ctx.author.id)
 
@@ -1744,21 +1800,38 @@ async def qhesaparkaplan(ctx):
         return await ctx.send("❌ Bir resim dosyası eklemelisin.")
 
     attachment = ctx.message.attachments[0]
+
+    # sadece resim kabul et
+    if not attachment.filename.lower().endswith(("png","jpg","jpeg","webp")):
+        return await ctx.send("❌ Sadece **png / jpg / jpeg / webp** formatında resim yükleyebilirsin.")
+
     url = attachment.url
 
-    para = user.get("para",0)
+    simdi = int(time.time())
+    premium_until = user.get("premium_until",0)
 
-    if para < 100000:
-        return await ctx.send("❌ Bunun için **100.000 EwoCoin** gerekli.")
+    premium = premium_until > simdi
 
-    # para kes
-    collection.update_one(
-        {"_id": str(ctx.author.id)},
-        {"$inc": {"para": -100000}}
-    )
+    if not premium:
 
-    guild = bot.get_guild(1471843922115301493)
-    channel = guild.get_channel(1483051326840635442)
+        para = user.get("para",0)
+
+        if para < ARKAPLAN_FIYAT:
+            return await ctx.send("❌ Bunun için **100.000 EwoCoin** gerekli.")
+
+        # para kes
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": -ARKAPLAN_FIYAT}}
+        )
+
+        mesaj = f"💰 **{formatla(ARKAPLAN_FIYAT)} EwoCoin** kesildi."
+
+    else:
+        mesaj = "⭐ Premium kullanıcı olduğun için **ücretsiz** olarak yetkililere gönderildi. Onayb bekleniyor."
+
+    guild = bot.get_guild(LOG_GUILD)
+    channel = guild.get_channel(LOG_CHANNEL)
 
     embed = discord.Embed(
         title="Yeni Hesap Arkaplan İsteği",
@@ -1766,6 +1839,7 @@ async def qhesaparkaplan(ctx):
 Kullanıcı: {ctx.author}
 Sunucu: {ctx.guild.name}
 ID: {ctx.author.id}
+Premium: {"Evet" if premium else "Hayır"}
 """,
         color=0xffcc00
     )
@@ -1776,7 +1850,7 @@ ID: {ctx.author.id}
 
     await channel.send(embed=embed, view=view)
 
-    await ctx.send("✅ Arkaplan yetkililere gönderildi. Onay bekleniyor.")
+    await ctx.send(f"✅ Arkaplan yetkililere gönderildi. Onay bekleniyor.\n{mesaj}")
 
 # =====================================================
 # 👤 HESAP KOMUTU (TÜM VARLIKLAR GÖSTERİR)
@@ -2742,10 +2816,19 @@ async def sat(ctx, varlik_adi: str, miktar: int):
     )
 
 # ------------------- Cooldown hata mesajı --------------------
+import math
+
 @bot.event
 async def on_command_error(ctx, error):
+
     if isinstance(error, commands.CommandOnCooldown):
-        await ctx.send(f"⏳ Bu komutu tekrar kullanmak için {round(error.retry_after)} saniye beklemelisin!")
+
+        kalan = math.ceil(error.retry_after)
+
+        await ctx.send(
+            f"⏳ Bu komutu tekrar kullanmak için **{kalan} saniye** beklemelisin!",
+            delete_after=kalan
+        )
 # ------------------ Bot Durum ---------------------
 from discord.ext import tasks
 
@@ -4599,96 +4682,91 @@ async def kasaaç(ctx, *, kasa_adi: str):
     await xp_ekle(ctx.author.id, 15)
 
 # İŞLETME SİSTEMİ
-# İŞLETMELER KOMUTU
+class IsletmeSelect(discord.ui.Select):
+
+    def __init__(self):
+
+        options = []
+
+        for isim, veri in ISLETMELER.items():
+
+            options.append(
+                discord.SelectOption(
+                    label=isim.capitalize(),
+                    description=f"Fiyat: {formatla(veri['fiyat'])}"
+                )
+            )
+
+        super().__init__(
+            placeholder="İşletme seç...",
+            min_values=1,
+            max_values=1,
+            options=options[:25]
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+
+        secilen = self.values[0].lower()
+        veri = ISLETMELER[secilen]
+
+        embed = discord.Embed(
+            title=f"🏭 {secilen.capitalize()}",
+            color=discord.Color.dark_teal()
+        )
+
+        embed.add_field(
+            name="💰 Fiyat",
+            value=f"{formatla(veri['fiyat'])} EwoCoin",
+            inline=False
+        )
+
+        embed.add_field(
+            name="📈 Saatlik Gelir",
+            value=f"{formatla(veri['gelir'])} EwoCoin",
+            inline=False
+        )
+
+        embed.add_field(
+            name="🔼 Yükseltme",
+            value="Fiyat x %40 x Level",
+            inline=False
+        )
+
+        embed.set_footer(text="Satın almak için: q!işletmeal <isim>")
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
+
+class IsletmeMenu(discord.ui.View):
+
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+        self.add_item(IsletmeSelect())
+
+    async def interaction_check(self, interaction: discord.Interaction):
+
+        if interaction.user != self.author:
+            await interaction.response.send_message(
+                "❌ Bu menüyü sadece komutu kullanan kişi kullanabilir.",
+                ephemeral=True
+            )
+            return False
+
+        return True
+
 @bot.command()
 @commands.cooldown(1, 12, commands.BucketType.user)
 async def işletmeler(ctx):
 
     embed = discord.Embed(
-        title="🏭 Aktif İşletmeler",
-        description="Pasif gelir sağlayan tüm işletmeler aşağıdadır:",
+        title="🏭 İşletmeler",
+        description="Aşağıdaki menüden işletme seçebilirsin.",
         color=discord.Color.dark_teal()
-    )
-
-    embed.add_field(
-        name="🪨 Maden",
-        value="💰 Fiyat: 300.000\n📈 Saatlik: 4.000\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🌾 Çiftlik",
-        value="💰 Fiyat: 450.000\n📈 Saatlik: 7.000\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🏨 Otel",
-        value="💰 Fiyat: 900.000\n📈 Saatlik: 14.000\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🏭 Fabrika",
-        value="💰 Fiyat: 2.000.000\n📈 Saatlik: 32.500\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🏦 Banka Şubesi",
-        value="💰 Fiyat: 3.500.000\n📈 Saatlik: 52.500\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🚢 Liman",
-        value="💰 Fiyat: 5.000.000\n📈 Saatlik: 87.500\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🏢 Şirket",
-        value="💰 Fiyat: 8.000.000\n📈 Saatlik: 148.750\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="👑 Holding",
-        value="💰 Fiyat: 14.000.000\n📈 Saatlik: 225.000\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🧪 Teknolojiparki",
-        value="💰 Fiyat: 35.000.000\n📈 Saatlik: 275.000\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🏭 Megafabrika",
-        value="💰 Fiyat: 100.000.000\n📈 Saatlik: 330.000\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🌍 Globalsirket",
-        value="💰 Fiyat: 500.000.000\n📈 Saatlik: 485.000\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🚀 Uzaymadeni",
-        value="💰 Fiyat: 2.000.000.000\n📈 Saatlik: 520.000\n🔼 Yükseltme: Fiyat x %40 x Level",
-        inline=False
     )
 
     embed.set_thumbnail(url=bot.user.avatar.url)
 
-    embed.set_footer(
-        text="🔼 Örnek: Maden Lv1→2 = 120k | Lv2→3 = 240k | Level arttıkça maliyet artar."
-    )
-
-    await ctx.send(embed=embed)
+    await ctx.send(embed=embed, view=IsletmeMenu(ctx.author))
 
 # işletme top
 @bot.command()
