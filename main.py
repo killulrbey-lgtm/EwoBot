@@ -984,55 +984,70 @@ async def paragonder(ctx, member: discord.Member, miktar: int):
     if user["para"] < miktar:
         return await ctx.send("❌ Yeterli paran yok")
 
-    level = user.get("level", 1)
-
-    # Level'e göre limit
-    limit = get_level_limit(level)
-
-    # Premium kontrol
-    if user.get("premium_until", 0) > int(time.time()):
-        limit *= 2
-
     now = int(time.time())
 
-    gunluk = user.get("gonderilen_para", 0)
-    reset = user.get("gonderilen_reset", now)
+    # OWNER / YETKİLİ LİMİTSİZ
+    if ctx.author.id != 1271933410251772017:
 
-    # Reset zamanı geldiyse sıfırla
-    if now >= reset:
-        gunluk = 0
-        reset = now + 86400
+        level = user.get("level", 1)
 
-    # Limit kontrol
-    if gunluk + miktar > limit:
+        # level limiti
+        limit = get_level_limit(level)
 
-        kalan = reset - now
+        # premium kontrol
+        if user.get("premium_until", 0) > now:
+            limit *= 2
 
-        return await ctx.send(
-            f"❌ Günlük **{formatla(limit)}** transfer limitine ulaştın\n"
-            f"⏳ **{kalan_sure(kalan)}** boyunca para gönderemezsin"
+        gunluk = user.get("gonderilen_para", 0)
+        reset = user.get("gonderilen_reset", now)
+
+        # reset kontrol
+        if now >= reset:
+            gunluk = 0
+            reset = now + 86400
+
+        kalan_limit = limit - gunluk
+
+        if miktar > kalan_limit:
+
+            kalan = reset - now
+
+            return await ctx.send(
+                f"❌ Günlük transfer limitini aşıyorsun\n\n"
+                f"💸 Günlük Limit: **{formatla(limit)}**\n"
+                f"📊 Kullanılan: **{formatla(gunluk)}**\n"
+                f"🟢 Kalan Limit: **{formatla(kalan_limit)}**\n\n"
+                f"⏳ Limit sıfırlanmasına: **{kalan_sure(kalan)}**"
+            )
+
+        # database update
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {
+                "$inc": {
+                    "para": -miktar,
+                    "gonderilen_para": miktar
+                },
+                "$set": {
+                    "gonderilen_reset": reset
+                }
+            }
         )
 
-    # Database güncelle
-    collection.update_one(
-        {"_id": str(ctx.author.id)},
-        {
-            "$inc": {
-                "para": -miktar,
-                "gonderilen_para": miktar
-            },
-            "$set": {
-                "gonderilen_reset": reset
-            }
-        }
-    )
+    else:
+        # owner limitsiz gönderir
+        collection.update_one(
+            {"_id": str(ctx.author.id)},
+            {"$inc": {"para": -miktar}}
+        )
 
+    # alıcıya para ekle
     collection.update_one(
         {"_id": str(member.id)},
         {"$inc": {"para": miktar}}
     )
 
-    # Embed mesaj
+    # embed mesaj
     embed = discord.Embed(
         title="💸 Para Transferi Başarılı",
         color=discord.Color.green()
@@ -1058,26 +1073,9 @@ async def paragonder(ctx, member: discord.Member, miktar: int):
         inline=False
     )
 
-    embed.add_field(
-        name="📊 Günlük Transfer Bilgisi",
-        value=(
-            f"Limit: **{formatla(limit)}**\n"
-            f"Kullanılan: **{formatla(gunluk + miktar)}**\n"
-            f"Kalan: **{formatla(limit - (gunluk + miktar))}**"
-        ),
-        inline=False
-    )
-
     embed.set_footer(text="EwoBot Ekonomi Sistemi")
 
     await ctx.send(embed=embed)
-
-def get_max_bet(user):
-
-    if is_premium(user):
-        return 250000
-
-    return 100000
 
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
