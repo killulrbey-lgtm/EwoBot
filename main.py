@@ -358,17 +358,17 @@ async def xp_ekle(user_id, miktar):
 
 async def profil_karti_olustur(ctx, user):
 
-    width = 900
-    height = 450
+    width = 820
+    height = 430
 
     img = Image.new("RGB", (width, height), (47, 49, 54))
     draw = ImageDraw.Draw(img)
 
     # ================= FONT =================
 
-    font_title = ImageFont.truetype("Poppins-Bold.ttf", 40)
-    font_big = ImageFont.truetype("Poppins-Bold.ttf", 26)
-    font_small = ImageFont.truetype("Poppins-Bold.ttf", 20)
+    font_title = ImageFont.truetype("Poppins-Bold.ttf", 32)
+    font_text = ImageFont.truetype("Poppins-Bold.ttf", 20)
+    font_small = ImageFont.truetype("Poppins-Bold.ttf", 16)
 
     # ================= AVATAR =================
 
@@ -379,11 +379,11 @@ async def profil_karti_olustur(ctx, user):
             avatar_bytes = await resp.read()
 
     avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
-    avatar = avatar.resize((140,140))
+    avatar = avatar.resize((110,110))
 
-    mask = Image.new("L", (140,140), 0)
+    mask = Image.new("L", (110,110), 0)
     mask_draw = ImageDraw.Draw(mask)
-    mask_draw.ellipse((0,0,140,140), fill=255)
+    mask_draw.ellipse((0,0,110,110), fill=255)
 
     img.paste(avatar, (40,40), mask)
 
@@ -391,36 +391,96 @@ async def profil_karti_olustur(ctx, user):
 
     para = user.get("para",0)
     banka = user.get("banka",0)
+
     meslek = user.get("meslek","Yok")
 
     pvp = user.get("pvp",{}) or {}
-    rank = pvp.get("rank_point",0)
+
+    rank_point = pvp.get("rank_point",0)
+    win = pvp.get("win",0)
+    lose = pvp.get("lose",0)
+
+    rozet = user.get("aktif_rozet","Yok")
 
     es = user.get("married_to")
 
     # ================= TITLE =================
 
-    draw.text((220,40), f"{ctx.author.name}'nin Hesabi", font=font_title, fill=(255,255,255))
+    draw.text((180,40), f"{ctx.author.name}'nin Hesabı", font=font_title, fill=(255,255,255))
 
-    # ================= EKONOMİ =================
+    # ================= PARA =================
 
-    draw.text((220,120), f"Nakit: {formatla(para)}", font=font_big, fill=(80,200,255))
-    draw.text((220,160), f"Banka: {formatla(banka)}", font=font_big, fill=(80,200,255))
+    draw.text((60,180), f"💰 Nakit: {formatla(para)}", font=font_text, fill=(80,200,255))
+    draw.text((60,210), f"🏦 Banka: {formatla(banka)}", font=font_text, fill=(80,200,255))
+
+    faiz = int(banka*0.05)
+
+    draw.text((60,240), f"📈 Günlük Faiz: {formatla(faiz)}", font=font_text, fill=(200,200,200))
 
     # ================= MESLEK =================
 
-    draw.text((220,220), f"Meslek: {meslek}", font=font_big, fill=(255,255,255))
+    draw.text((320,180), f"💼 Meslek: {meslek}", font=font_text, fill=(255,255,255))
 
     # ================= RANK =================
 
-    draw.text((220,270), f"Düello Rank: {rank}", font=font_big, fill=(255,200,80))
+    draw.text((320,210), f"⚔ Rank Puanı: {rank_point}", font=font_text, fill=(255,200,100))
+    draw.text((320,240), f"🥇 {win} Win  ❌ {lose} Lose", font=font_text, fill=(255,200,100))
+
+    # ================= ROZET =================
+
+    draw.text((60,300), f"👑 En İyi Rozet: {rozet}", font=font_text, fill=(255,255,255))
+
+    # ================= EŞ =================
+
+    if es:
+        try:
+            es_user = bot.get_user(int(es)) or await bot.fetch_user(int(es))
+            es_name = es_user.name
+        except:
+            es_name = "Bilinmiyor"
+    else:
+        es_name = "Yok"
+
+    draw.text((60,330), f"💍 Eşi: {es_name}", font=font_text, fill=(255,255,255))
+
+    # ================= VARLIK =================
+
+    yatirimlar = user.get("yatirimlar",{}) or {}
+
+    text = "📦 Varlıklar: "
+
+    for v,a in yatirimlar.items():
+        if a > 0:
+            text += f"{v}({a}) "
+
+    if text == "📦 Varlıklar: ":
+        text += "Yok"
+
+    draw.text((320,300), text, font=font_small, fill=(200,200,200))
+
+    # ================= İŞLETME =================
+
+    isletmeler = user.get("isletmeler",{}) or {}
+
+    text2 = "🏭 İşletmeler: "
+
+    for i,v in isletmeler.items():
+        adet = v.get("adet",0)
+
+        if adet > 0:
+            text2 += f"{i}({adet}) "
+
+    if text2 == "🏭 İşletmeler: ":
+        text2 += "Yok"
+
+    draw.text((320,330), text2, font=font_small, fill=(200,200,200))
 
     # ================= FOOTER =================
 
-    draw.text((30,400), "EwoBot Ekonomi Sistemi", font=font_small, fill=(180,180,180))
+    draw.text((20,400), "EwoBot Ekonomi Sistemi", font=font_small, fill=(150,150,150))
 
     buffer = io.BytesIO()
-    img.save(buffer, "PNG")
+    img.save(buffer,"PNG")
     buffer.seek(0)
 
     return buffer
