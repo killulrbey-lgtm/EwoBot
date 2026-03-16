@@ -29,6 +29,7 @@ economy_col = db["ekonomi"]
 ekonomi_collection = db["ekonomi"]
 settings_collection = db["settings"]
 settings_col = db["settings"]
+oneriban_collection = db["oneriban"]
 
 # fonksyon bakim modu
 
@@ -549,6 +550,19 @@ def global_toplam_para():
         return result[0]["total_para"] + result[0]["total_banka"]
     return 0 
 
+def oneriban_kontrol(user_id):
+
+    data = oneriban_collection.find_one({"_id": str(user_id)})
+
+    if not data:
+        return False
+
+    if data["until"] < int(time.time()):
+        oneriban_collection.delete_one({"_id": str(user_id)})
+        return False
+
+    return True
+
 def enflasyon_hesapla(taban_fiyat):
     toplam_para = global_toplam_para()
 
@@ -586,13 +600,13 @@ def is_premium(user):
     return user.get("premium_until", 0) > int(time.time())
 
 def get_rank_name(point):
-    if point < 100:
+    if point < 5:
         return "Bronz"
-    elif point < 300:
+    elif point < 15:
         return "Gümüş"
-    elif point < 600:
+    elif point < 30:
         return "Altın"
-    elif point < 1000:
+    elif point < 50:
         return "Elmas"
     else:
         return "Efsane"
@@ -1009,7 +1023,74 @@ async def bankayatır(ctx, miktar: int):
 
 from discord.ui import View, Button
 
+class YorumModal(discord.ui.Modal, title="Öneriye Yorum Yap"):
+
+    yorum = discord.ui.TextInput(label="Yorumunuz", style=discord.TextStyle.paragraph)
+
+    def __init__(self, user_id, oneri):
+        super().__init__()
+        self.user_id = user_id
+        self.oneri = oneri
+
+    async def on_submit(self, interaction: discord.Interaction):
+
+        user = await bot.fetch_user(self.user_id)
+
+        embed = discord.Embed(
+            title="💬 Önerinize Yorum Yapıldı",
+            description=f"Yetkili: {interaction.user.mention}\n\nYorum:\n{self.yorum.value}\n\nÖneriniz:\n{self.oneri}",
+            color=discord.Color.blurple()
+        )
+
+        await user.send(embed=embed)
+
+        await interaction.response.send_message("Yorum gönderildi.", ephemeral=True)
+
+class OneriView(discord.ui.View):
+
+    def __init__(self, user_id, oneri):
+        super().__init__(timeout=None)
+        self.user_id = user_id
+        self.oneri = oneri
+
+    @discord.ui.button(label="Onayla", style=discord.ButtonStyle.green)
+    async def onayla(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        user = await bot.fetch_user(self.user_id)
+
+        embed = discord.Embed(
+            title="✅ Öneriniz Onaylandı",
+            description=f"Yetkili: {interaction.user.mention}\n\nÖneriniz:\n{self.oneri}",
+            color=discord.Color.green()
+        )
+
+        await user.send(embed=embed)
+
+        await interaction.response.send_message("Öneri onaylandı.", ephemeral=True)
+
+    @discord.ui.button(label="Reddet", style=discord.ButtonStyle.red)
+    async def reddet(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        user = await bot.fetch_user(self.user_id)
+
+        embed = discord.Embed(
+            title="❌ Öneriniz Reddedildi",
+            description=f"Yetkili: {interaction.user.mention}\n\nÖneriniz:\n{self.oneri}",
+            color=discord.Color.red()
+        )
+
+        await user.send(embed=embed)
+
+        await interaction.response.send_message("Öneri reddedildi.", ephemeral=True)
+
+    @discord.ui.button(label="Yorum Yap", style=discord.ButtonStyle.blurple)
+    async def yorum(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        await interaction.response.send_modal(YorumModal(self.user_id, self.oneri))
+
 class HelpMenu(View):
+
+
 
     def __init__(self, author):
         super().__init__(timeout=180)
@@ -1418,7 +1499,7 @@ async def hesap(ctx):
         user = get_user(ctx.author.id)
 
         if not user:
-            await ctx.send("❌ Kullanıcı verisi bulunamadı.")
+            await ctx.send("Botun yetkisi yetersiz, Embedli mesaj atamıyor.")
             return
 
         meslek = user.get("meslek", "Yok")
@@ -2376,6 +2457,80 @@ async def satınal(ctx, varlik_adi: str, miktar: int):
         f"💰 Birim fiyat: {fiyat:,}\n"
         f"💸 Toplam: {toplam:,}"
     )
+
+# öneri
+@bot.command()
+async def öneriban(ctx, user: discord.User, süre: str):
+
+    if not ctx.author.guild_permissions.administrator:
+        return
+
+    zaman = {
+        "1m": 60,
+        "10m": 600,
+        "1d": 86400,
+        "2d": 172800,
+        "10d": 864000,
+        "30d": 2592000
+    }
+
+    if süre not in zaman:
+        return await ctx.send("Geçersiz süre.")
+
+    until = int(time.time()) + zaman[süre]
+
+    oneriban_collection.update_one(
+        {"_id": str(user.id)},
+        {"$set": {"until": until}},
+        upsert=True
+    )
+
+    await ctx.send(f"{user.mention} öneri sisteminden {süre} yasaklandı.")
+
+@bot.command()
+@commands.cooldown(1, 600, commands.BucketType.user)
+async def öneriver(ctx, *, oneri):
+
+    if oneriban_kontrol(ctx.author.id):
+        return await ctx.send("❌ Öneri verme yetkin geçici olarak yasaklandı.")
+
+    log_channel = bot.get_channel(1482875494687969402)
+
+    embed = discord.Embed(
+        title="📩 EwoBot Öneri Sistemi",
+        color=discord.Color.gold()
+    )
+
+    embed.add_field(name="Öneriyi Yapan", value=ctx.author.mention, inline=False)
+    embed.add_field(name="Zaman", value=f"<t:{int(time.time())}:F>", inline=False)
+    embed.add_field(name="Öneri Yapılan Sunucu", value=ctx.guild.name, inline=False)
+    embed.add_field(name="Öneri", value=oneri, inline=False)
+
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+
+    view = OneriView(ctx.author.id, oneri)
+
+    await log_channel.send(embed=embed, view=view)
+
+    # kullanıcıya dm
+
+    dm_embed = discord.Embed(
+        title="📬 EwoBot Öneri Sistemi",
+        description="Öneriniz için teşekkürler.\nÖneriniz logs kanalına gönderildi.\nOnaylandığında veya reddedildiğinde size bildirilecektir.",
+        color=discord.Color.green()
+    )
+
+    dm_embed.add_field(name="Öneriniz", value=oneri, inline=False)
+    dm_embed.set_thumbnail(url=bot.user.display_avatar.url)
+
+    try:
+        await ctx.author.send(embed=dm_embed)
+    except:
+        pass
+
+    await ctx.send("✅ Öneriniz alındı.")
+
+
 
 # ================== SAT KOMUTU ==================
 
@@ -6709,6 +6864,14 @@ async def on_ready():
         print("TicketPanelView yüklendi")
     except Exception as e:
         print("TicketPanelView yüklenemedi:", e)
+
+# ÖNERİ SİSTEMİ VIEW
+
+    try:
+        bot.add_view(OneriView(None, None))
+        print("OneriView yüklendi")
+    except Exception as e:
+        print("OneriView yüklenemedi:", e)
 
     # LOOPLAR
     loops = [
