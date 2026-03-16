@@ -6446,7 +6446,7 @@ async def baskın(ctx, member: discord.Member, *, isletme: str):
 
     await ctx.send(mesaj)
 
-@@bot.command(name="mafyakur")
+@bot.command(name="mafyakur")
 @commands.cooldown(1, 7, commands.BucketType.user)
 async def mafyakur(ctx, isim: str):
 
