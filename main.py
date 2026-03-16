@@ -1620,14 +1620,14 @@ async def meslek_al(ctx, *, secim):
 # 👤 HESAP KOMUTU (TÜM VARLIKLAR GÖSTERİR)
 # =====================================================
 
-bot.command()
+@bot.command()
 @commands.cooldown(1, 7, commands.BucketType.user)
 async def hesap(ctx):
 
     user = get_user(ctx.author.id)
 
     if not user:
-        await ctx.send("Kullanıcı verisi bulunamadı.")
+        await ctx.send("Botun bu sunucuda yetkileri kısıtlı!.")
         return
 
     card = await profil_karti_olustur(ctx, user)
