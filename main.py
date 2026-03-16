@@ -356,118 +356,68 @@ async def xp_ekle(user_id, miktar):
                 {"$inc": {"envanter.Premium Kasa": 1}}
             )
 
-async def profil_karti_olustur(ctx, user_data):
+async def profil_karti_olustur(ctx, user):
 
-    width, height = 1000, 520
-    img = Image.new("RGB", (width, height), (32, 34, 37))
+    width = 900
+    height = 450
+
+    img = Image.new("RGB", (width, height), (47, 49, 54))
     draw = ImageDraw.Draw(img)
 
-    # Fontlar
-    try:
-        title_font = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 42)
-        text_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 24)
-        small_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 20)
-    except:
-        title_font = ImageFont.load_default()
-        text_font = ImageFont.load_default()
-        small_font = ImageFont.load_default()
+    # ================= FONT =================
 
-    # ===== Avatar indir =====
+    font_title = ImageFont.truetype("Poppins-Bold.ttf", 40)
+    font_big = ImageFont.truetype("Poppins-Bold.ttf", 26)
+    font_small = ImageFont.truetype("Poppins-Bold.ttf", 20)
+
+    # ================= AVATAR =================
+
+    avatar_url = ctx.author.display_avatar.url
+
     async with aiohttp.ClientSession() as session:
-        async with session.get(ctx.author.display_avatar.url) as resp:
+        async with session.get(avatar_url) as resp:
             avatar_bytes = await resp.read()
 
-    avatar = Image.open(io.BytesIO(avatar_bytes)).resize((160, 160)).convert("RGBA")
+    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+    avatar = avatar.resize((140,140))
 
-    # Yuvarlak avatar maskesi
-    mask = Image.new("L", (160,160), 0)
+    mask = Image.new("L", (140,140), 0)
     mask_draw = ImageDraw.Draw(mask)
-    mask_draw.ellipse((0,0,160,160), fill=255)
-    avatar.putalpha(mask)
+    mask_draw.ellipse((0,0,140,140), fill=255)
 
-    img.paste(avatar, (40,40), avatar)
+    img.paste(avatar, (40,40), mask)
 
-    # ===== Başlık =====
-    draw.text((230,50), f"{ctx.author.name}'nin Hesabı", fill=(255,255,255), font=title_font)
+    # ================= DATA =================
 
-    # ===== Veri çek =====
-    para = user_data.get("para",0)
-    banka = user_data.get("banka",0)
-    meslek = user_data.get("meslek","Yok")
+    para = user.get("para",0)
+    banka = user.get("banka",0)
+    meslek = user.get("meslek","Yok")
 
-    maas = 0
-    if "meslekler" in globals():
-        maas = meslekler.get(meslek, {}).get("maas", 0)
+    pvp = user.get("pvp",{}) or {}
+    rank = pvp.get("rank_point",0)
 
-    pvp = user_data.get("pvp", {}) or {}
-    rank_point = pvp.get("rank_point",0)
+    es = user.get("married_to")
 
-    try:
-        rank_name = get_rank_name(rank_point)
-    except:
-        rank_name = "Unranked"
+    # ================= TITLE =================
 
-    rozet = user_data.get("aktif_rozet","Yok")
+    draw.text((220,40), f"{ctx.author.name}'nin Hesabi", font=font_title, fill=(255,255,255))
 
-    # ===== Eş =====
-    es_text = "Yok"
-    es_id = user_data.get("married_to")
+    # ================= EKONOMİ =================
 
-    if es_id:
-        try:
-            es_user = ctx.bot.get_user(int(es_id)) or await ctx.bot.fetch_user(int(es_id))
-            es_text = es_user.name
-        except:
-            es_text = "Bilinmiyor"
+    draw.text((220,120), f"Nakit: {formatla(para)}", font=font_big, fill=(80,200,255))
+    draw.text((220,160), f"Banka: {formatla(banka)}", font=font_big, fill=(80,200,255))
 
-    # ===== Varlıklar =====
-    yatirimlar = user_data.get("yatirimlar", {}) or {}
-    varlik_text = ""
+    # ================= MESLEK =================
 
-    for varlik, adet in yatirimlar.items():
-        if adet > 0:
-            varlik_text += f"{varlik}:{adet} "
+    draw.text((220,220), f"Meslek: {meslek}", font=font_big, fill=(255,255,255))
 
-    if not varlik_text:
-        varlik_text = "Yok"
+    # ================= RANK =================
 
-    # ===== İşletmeler =====
-    isletmeler = user_data.get("isletmeler", {}) or {}
-    isletme_text = ""
+    draw.text((220,270), f"Düello Rank: {rank}", font=font_big, fill=(255,200,80))
 
-    for isim, veri in isletmeler.items():
-        adet = veri.get("adet",0)
-        if adet > 0:
-            isletme_text += f"{isim}x{adet} "
+    # ================= FOOTER =================
 
-    if not isletme_text:
-        isletme_text = "Yok"
-
-    # ===== Mafya =====
-    mafia_text = "Yok"
-
-    if user_data.get("mafia_id"):
-        mafia = mafia_col.find_one({"_id": user_data["mafia_id"]})
-        if mafia:
-            mafia_text = mafia["name"]
-
-    # ===== Kart Yazıları =====
-
-    draw.text((230,140), f"Nakit: {para}", font=text_font, fill=(200,200,200))
-    draw.text((230,180), f"Banka: {banka}", font=text_font, fill=(200,200,200))
-
-    draw.text((230,240), f"Meslek: {meslek}", font=text_font, fill=(200,200,200))
-    draw.text((230,280), f"Maaş: {maas}", font=text_font, fill=(200,200,200))
-
-    draw.text((520,140), f"Rank: {rank_name}", font=text_font, fill=(200,200,200))
-    draw.text((520,180), f"Rozet: {rozet}", font=text_font, fill=(200,200,200))
-    draw.text((520,220), f"Eş: {es_text}", font=text_font, fill=(200,200,200))
-    draw.text((520,260), f"Mafya: {mafia_text}", font=text_font, fill=(200,200,200))
-
-    draw.text((230,340), f"Varlıklar: {varlik_text}", font=text_font, fill=(200,200,200))
-    draw.text((230,380), f"İşletmeler: {isletme_text}", font=text_font, fill=(200,200,200))
-
-    draw.text((40,470), "EwoBot Ekonomi Sistemi", font=small_font, fill=(140,140,140))
+    draw.text((30,400), "EwoBot Ekonomi Sistemi", font=font_small, fill=(180,180,180))
 
     buffer = io.BytesIO()
     img.save(buffer, "PNG")
