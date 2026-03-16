@@ -12,6 +12,10 @@ from collections import defaultdict
 import uuid
 import time
 from discord.ui import View, Select
+import re
+from PIL import Image, ImageDraw, ImageFont
+import aiohttp
+import io
 
 # ================= MONGO =================
 
@@ -351,6 +355,125 @@ async def xp_ekle(user_id, miktar):
                 {"_id": str(user_id)},
                 {"$inc": {"envanter.Premium Kasa": 1}}
             )
+
+async def profil_karti_olustur(ctx, user_data):
+
+    width, height = 1000, 520
+    img = Image.new("RGB", (width, height), (32, 34, 37))
+    draw = ImageDraw.Draw(img)
+
+    # Fontlar
+    try:
+        title_font = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 42)
+        text_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 24)
+        small_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 20)
+    except:
+        title_font = ImageFont.load_default()
+        text_font = ImageFont.load_default()
+        small_font = ImageFont.load_default()
+
+    # ===== Avatar indir =====
+    async with aiohttp.ClientSession() as session:
+        async with session.get(ctx.author.display_avatar.url) as resp:
+            avatar_bytes = await resp.read()
+
+    avatar = Image.open(io.BytesIO(avatar_bytes)).resize((160, 160)).convert("RGBA")
+
+    # Yuvarlak avatar maskesi
+    mask = Image.new("L", (160,160), 0)
+    mask_draw = ImageDraw.Draw(mask)
+    mask_draw.ellipse((0,0,160,160), fill=255)
+    avatar.putalpha(mask)
+
+    img.paste(avatar, (40,40), avatar)
+
+    # ===== Başlık =====
+    draw.text((230,50), f"{ctx.author.name}'nin Hesabı", fill=(255,255,255), font=title_font)
+
+    # ===== Veri çek =====
+    para = user_data.get("para",0)
+    banka = user_data.get("banka",0)
+    meslek = user_data.get("meslek","Yok")
+
+    maas = 0
+    if "meslekler" in globals():
+        maas = meslekler.get(meslek, {}).get("maas", 0)
+
+    pvp = user_data.get("pvp", {}) or {}
+    rank_point = pvp.get("rank_point",0)
+
+    try:
+        rank_name = get_rank_name(rank_point)
+    except:
+        rank_name = "Unranked"
+
+    rozet = user_data.get("aktif_rozet","Yok")
+
+    # ===== Eş =====
+    es_text = "Yok"
+    es_id = user_data.get("married_to")
+
+    if es_id:
+        try:
+            es_user = ctx.bot.get_user(int(es_id)) or await ctx.bot.fetch_user(int(es_id))
+            es_text = es_user.name
+        except:
+            es_text = "Bilinmiyor"
+
+    # ===== Varlıklar =====
+    yatirimlar = user_data.get("yatirimlar", {}) or {}
+    varlik_text = ""
+
+    for varlik, adet in yatirimlar.items():
+        if adet > 0:
+            varlik_text += f"{varlik}:{adet} "
+
+    if not varlik_text:
+        varlik_text = "Yok"
+
+    # ===== İşletmeler =====
+    isletmeler = user_data.get("isletmeler", {}) or {}
+    isletme_text = ""
+
+    for isim, veri in isletmeler.items():
+        adet = veri.get("adet",0)
+        if adet > 0:
+            isletme_text += f"{isim}x{adet} "
+
+    if not isletme_text:
+        isletme_text = "Yok"
+
+    # ===== Mafya =====
+    mafia_text = "Yok"
+
+    if user_data.get("mafia_id"):
+        mafia = mafia_col.find_one({"_id": user_data["mafia_id"]})
+        if mafia:
+            mafia_text = mafia["name"]
+
+    # ===== Kart Yazıları =====
+
+    draw.text((230,140), f"Nakit: {para}", font=text_font, fill=(200,200,200))
+    draw.text((230,180), f"Banka: {banka}", font=text_font, fill=(200,200,200))
+
+    draw.text((230,240), f"Meslek: {meslek}", font=text_font, fill=(200,200,200))
+    draw.text((230,280), f"Maaş: {maas}", font=text_font, fill=(200,200,200))
+
+    draw.text((520,140), f"Rank: {rank_name}", font=text_font, fill=(200,200,200))
+    draw.text((520,180), f"Rozet: {rozet}", font=text_font, fill=(200,200,200))
+    draw.text((520,220), f"Eş: {es_text}", font=text_font, fill=(200,200,200))
+    draw.text((520,260), f"Mafya: {mafia_text}", font=text_font, fill=(200,200,200))
+
+    draw.text((230,340), f"Varlıklar: {varlik_text}", font=text_font, fill=(200,200,200))
+    draw.text((230,380), f"İşletmeler: {isletme_text}", font=text_font, fill=(200,200,200))
+
+    draw.text((40,470), "EwoBot Ekonomi Sistemi", font=small_font, fill=(140,140,140))
+
+    buffer = io.BytesIO()
+    img.save(buffer, "PNG")
+    buffer.seek(0)
+
+    return buffer
 
 GOREVLER = [
 
@@ -1274,6 +1397,9 @@ Aşağıdan bir kategori seçerek komutları görebilirsin.
 
 **Rol Sistemi**
 `q!mafyarolleri`
+`q!rolisimdegistir <eskirolismi> <yenirolismi>`
+`q!mafyaat @kullanıcı`
+
 `q!rololustur`
 `q!rolkaldir`
 `q!roldegistir`
@@ -1316,6 +1442,8 @@ Aşağıdan bir kategori seçerek komutları görebilirsin.
 `q!rozetlerim`
 `q!hesaprozetekle`
 `q!davet`
+`q!premium`
+`q!öneriver <mesajınız>`
 """
 
         elif secim == "Moderasyon":
@@ -1379,44 +1507,59 @@ meslekler = {
     "Seyyar Satıcı": {"fiyat": 10_000, "maas": 8_000},
 }
 
-# Meslekleri ikiye böl
-meslek_list = list(meslekler.items())
-yarisi = len(meslek_list) // 2
 
-meslek_sayfa1 = meslek_list[:yarisi]
-meslek_sayfa2 = meslek_list[yarisi:]
+class MeslekSelect(discord.ui.Select):
 
+    def __init__(self):
 
-def meslek_embed_olustur(sayfa):
+        options = []
 
-    embed = discord.Embed(
-        title="💼 Mevcut Meslekler",
-        color=discord.Color.purple()
-    )
+        for isim, veri in meslekler.items():
+            options.append(
+                discord.SelectOption(
+                    label=isim,
+                    description=f"Fiyat: {formatla(veri['fiyat'])}"
+                )
+            )
 
-    if sayfa == 1:
-        data = meslek_sayfa1
-    else:
-        data = meslek_sayfa2
-
-    for isim, veri in data:
-
-        embed.add_field(
-            name=isim,
-            value=f"Fiyat: {veri['fiyat']} EwoCoin\nGünlük Maaş: {veri['maas']} EwoCoin",
-            inline=False
+        super().__init__(
+            placeholder="Meslek seç...",
+            min_values=1,
+            max_values=1,
+            options=options[:25]
         )
 
-    embed.set_footer(text=f"Sayfa {sayfa}/2 • qmeslek al <meslek>")
+    async def callback(self, interaction: discord.Interaction):
 
-    return embed
+        meslek = self.values[0]
+        veri = meslekler[meslek]
+
+        embed = discord.Embed(
+            title=f"💼 {meslek}",
+            color=discord.Color.purple()
+        )
+
+        embed.add_field(
+            name="💰 Fiyat",
+            value=f"{formatla(veri['fiyat'])} EwoCoin"
+        )
+
+        embed.add_field(
+            name="💵 Maaş",
+            value=f"{formatla(veri['maas'])} EwoCoin"
+        )
+
+        embed.set_footer(text="Satın almak için: q!meslek al <meslek>")
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
 
 
-class MeslekView(View):
+class MeslekMenu(discord.ui.View):
 
     def __init__(self, author):
         super().__init__(timeout=120)
         self.author = author
+        self.add_item(MeslekSelect())
 
     async def interaction_check(self, interaction: discord.Interaction):
 
@@ -1429,31 +1572,17 @@ class MeslekView(View):
 
         return True
 
-    @discord.ui.button(label="⬅️ Sayfa 1", style=discord.ButtonStyle.primary)
-    async def sayfa1(self, interaction: discord.Interaction, button: Button):
-
-        await interaction.response.edit_message(
-            embed=meslek_embed_olustur(1),
-            view=self
-        )
-
-    @discord.ui.button(label="➡️ Sayfa 2", style=discord.ButtonStyle.primary)
-    async def sayfa2(self, interaction: discord.Interaction, button: Button):
-
-        await interaction.response.edit_message(
-            embed=meslek_embed_olustur(2),
-            view=self
-        )
-
 
 @bot.command(name="meslekler")
-@commands.cooldown(1, 4, commands.BucketType.user)
 async def meslekler_cmd(ctx):
 
-    await ctx.send(
-        embed=meslek_embed_olustur(1),
-        view=MeslekView(ctx.author)
+    embed = discord.Embed(
+        title="💼 Meslekler",
+        description="Aşağıdaki menüden meslek seçebilirsin.",
+        color=discord.Color.purple()
     )
+
+    await ctx.send(embed=embed, view=MeslekMenu(ctx.author))
 
 # Meslek satın alma
 @bot.command(name="meslek")
@@ -1491,164 +1620,21 @@ async def meslek_al(ctx, *, secim):
 # 👤 HESAP KOMUTU (TÜM VARLIKLAR GÖSTERİR)
 # =====================================================
 
-@bot.command()
+bot.command()
 @commands.cooldown(1, 7, commands.BucketType.user)
 async def hesap(ctx):
-    try:
 
-        user = get_user(ctx.author.id)
+    user = get_user(ctx.author.id)
 
-        if not user:
-            await ctx.send("Botun yetkisi yetersiz, Embedli mesaj atamıyor.")
-            return
+    if not user:
+        await ctx.send("Kullanıcı verisi bulunamadı.")
+        return
 
-        meslek = user.get("meslek", "Yok")
-        maas = 0
+    card = await profil_karti_olustur(ctx, user)
 
-        if "meslekler" in globals():
-            maas = meslekler.get(meslek, {}).get("maas", 0)
+    file = discord.File(card, filename="profil.png")
 
-        banka = user.get("banka", 0)
-        para = user.get("para", 0)
-
-        faiz = int(banka * 0.05)
-
-        def safe_format(x):
-            try:
-                return formatla(x)
-            except:
-                return str(x)
-
-        envanter = user.get("envanter", {}) or {}
-
-        # ================= GÖRÜNÜŞ =================
-
-        gosteris = None
-        renk = discord.Color.blue()
-
-        for item in ["Elmas Görünüş", "Altın Görünüş", "Gümüş Görünüş", "Bronz Görünüş"]:
-            if envanter.get(item, 0) > 0:
-                gosteris = item
-
-        if gosteris == "Elmas Görünüş":
-            renk = discord.Color.from_rgb(0,255,255)
-
-        elif gosteris == "Altın Görünüş":
-            renk = discord.Color.gold()
-
-        elif gosteris == "Gümüş Görünüş":
-            renk = discord.Color.light_grey()
-
-        elif gosteris == "Bronz Görünüş":
-            renk = discord.Color.orange()
-
-        embed = discord.Embed(
-            title=f"👤 {ctx.author.name} Hesabı",
-            color=renk
-        )
-
-        embed.set_thumbnail(url=ctx.author.display_avatar.url)
-
-        # ================= PARA =================
-
-        embed.add_field(name="💰 Nakit", value=safe_format(para), inline=True)
-        embed.add_field(name="🏦 Banka", value=safe_format(banka), inline=True)
-
-        embed.add_field(
-            name="📈 Günlük Banka Faizi (%5)",
-            value=safe_format(faiz),
-            inline=False
-        )
-
-        # ================= MESLEK =================
-
-        embed.add_field(name="💼 Meslek", value=meslek, inline=True)
-        embed.add_field(name="💵 Günlük Maaş", value=safe_format(maas), inline=True)
-
-        # ================= PvP =================
-
-        pvp = user.get("pvp", {}) or {}
-
-        rank_point = pvp.get("rank_point", 0)
-        win = pvp.get("win", 0)
-        lose = pvp.get("lose", 0)
-
-        try:
-            rank_name = get_rank_name(rank_point)
-        except:
-            rank_name = "Unranked"
-
-        embed.add_field(
-            name="⚔️ Düello Rank",
-            value=f"🏆 Rank: {rank_name}\n⭐ Puan: {rank_point}\n🥇 Win: {win} | ❌ Lose: {lose}",
-            inline=False
-        )
-
-        # ================= ROZET =================
-
-        aktif_rozet = user.get("aktif_rozet")
-
-        if aktif_rozet:
-            embed.add_field(name="👑 Aktif Rozet", value=aktif_rozet, inline=False)
-
-        # ================= GÖRÜNÜŞ =================
-
-        if gosteris:
-            embed.add_field(name="✨ Görünüş", value=gosteris, inline=False)
-
-        # ================= EŞ =================
-
-        es_id = user.get("married_to")
-
-        if es_id:
-            try:
-                es_user = bot.get_user(int(es_id)) or await bot.fetch_user(int(es_id))
-                embed.add_field(name="💍 Eşi", value=es_user.name, inline=False)
-            except:
-                embed.add_field(name="💍 Eşi", value="Bilinmiyor", inline=False)
-
-        # ================= YATIRIMLAR =================
-
-        yatirimlar = user.get("yatirimlar", {}) or {}
-        text = ""
-
-        for varlik, adet in yatirimlar.items():
-
-            if adet > 0:
-                text += f"💎 {varlik.capitalize()}: {adet} adet\n"
-
-        if not text:
-            text = "Yatırım yok."
-
-        embed.add_field(name="📦 Varlıkların", value=text, inline=False)
-
-        # ================= İŞLETMELER =================
-
-        isletmeler = user.get("isletmeler", {}) or {}
-        isletme_text = ""
-
-        for isim, veri in isletmeler.items():
-
-            adet = veri.get("adet", 0)
-            level = veri.get("level", 1)
-
-            if adet > 0:
-                isletme_text += f"🏭 {isim.capitalize()} x{adet} (Lv.{level})\n"
-
-        if not isletme_text:
-            isletme_text = "İşletmen yok."
-
-        embed.add_field(name="🏭 İşletmelerin", value=isletme_text, inline=False)
-
-        embed.set_footer(
-            text="EwoBot Ekonomi Sistemi"
-        )
-
-        await ctx.send(embed=embed)
-
-    except Exception as e:
-        print("HESAP KOMUT HATASI:", e)
-        await ctx.send("❌ Hesap bilgileri yüklenirken bir hata oluştu.")
+    await ctx.send(file=file)
 
 # Dilenme komutu
 @bot.command()
@@ -2462,22 +2448,27 @@ async def satınal(ctx, varlik_adi: str, miktar: int):
 @bot.command()
 async def öneriban(ctx, user: discord.User, süre: str):
 
-    if not ctx.author.guild_permissions.administrator:
-        return
+    # Sadece belirli kullanıcı kullanabilir
+    if ctx.author.id != 1271933410251772017:
+        return await ctx.send("Bu komutu kullanma yetkin yok.")
 
-    zaman = {
-        "1m": 60,
-        "10m": 600,
-        "1d": 86400,
-        "2d": 172800,
-        "10d": 864000,
-        "30d": 2592000
+    # Süreyi kontrol et (örn: 1m, 10d, 300d, 2h gibi)
+    match = re.match(r"(\d+)([smhd])", süre)
+
+    if not match:
+        return await ctx.send("Geçersiz süre formatı. Örnek: 1m, 10d, 2h")
+
+    miktar = int(match.group(1))
+    birim = match.group(2)
+
+    saniye_carpan = {
+        "s": 1,
+        "m": 60,
+        "h": 3600,
+        "d": 86400
     }
 
-    if süre not in zaman:
-        return await ctx.send("Geçersiz süre.")
-
-    until = int(time.time()) + zaman[süre]
+    until = int(time.time()) + (miktar * saniye_carpan[birim])
 
     oneriban_collection.update_one(
         {"_id": str(user.id)},
