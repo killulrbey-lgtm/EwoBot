@@ -129,6 +129,18 @@ ISLETMELER = {
 
 }
 
+BOLGELER = {
+
+    "Geceklubu": {"fiyat": 750000, "gelir": 13000},
+    "Silahpazari": {"fiyat": 1750000, "gelir": 18000},
+    "Kumarhane": {"fiyat": 2500000, "gelir": 28000},
+    "Benzinlik": {"fiyat": 3750000, "gelir": 45000},
+    "Petrolsahasi": {"fiyat": 5000000, "gelir": 80000}
+    "Silahfabrikasi": {"fiyat": 7500000, "gelir": 110000},
+    "Yeraltisehri": {"fiyat": 11000000, "gelir": 145000}
+
+}
+
 invite_cache = {}
 mafia_col = db["mafias"]
 mafia_invites = db["mafia_invites"]
@@ -986,22 +998,22 @@ async def paragonder(ctx, member: discord.Member, miktar: int):
 
     now = int(time.time())
 
-    # OWNER / YETKİLİ LİMİTSİZ
+    # OWNER limitsiz
     if ctx.author.id != 1271933410251772017:
 
         level = user.get("level", 1)
 
-        # level limiti
+        # Level limit
         limit = get_level_limit(level)
 
-        # premium kontrol
+        # Premium kontrol
         if user.get("premium_until", 0) > now:
             limit *= 2
 
         gunluk = user.get("gonderilen_para", 0)
         reset = user.get("gonderilen_reset", now)
 
-        # reset kontrol
+        # Günlük reset
         if now >= reset:
             gunluk = 0
             reset = now + 86400
@@ -1012,15 +1024,42 @@ async def paragonder(ctx, member: discord.Member, miktar: int):
 
             kalan = reset - now
 
-            return await ctx.send(
-                f"❌ Günlük transfer limitini aşıyorsun\n\n"
-                f"💸 Günlük Limit: **{formatla(limit)}**\n"
-                f"📊 Kullanılan: **{formatla(gunluk)}**\n"
-                f"🟢 Kalan Limit: **{formatla(kalan_limit)}**\n\n"
-                f"⏳ Limit sıfırlanmasına: **{kalan_sure(kalan)}**"
+            embed = discord.Embed(
+                title="❌ Transfer Limiti Aşıldı",
+                color=discord.Color.red()
             )
 
-        # database update
+            embed.set_thumbnail(url=ctx.author.display_avatar.url)
+
+            embed.add_field(
+                name="💸 Günlük Limit",
+                value=f"{formatla(limit)} EwoCoin",
+                inline=True
+            )
+
+            embed.add_field(
+                name="📊 Kullanılan",
+                value=f"{formatla(gunluk)} EwoCoin",
+                inline=True
+            )
+
+            embed.add_field(
+                name="🟢 Kalan Limit",
+                value=f"{formatla(kalan_limit)} EwoCoin",
+                inline=False
+            )
+
+            embed.add_field(
+                name="⏳ Limit Sıfırlanma Süresi",
+                value=kalan_sure(kalan),
+                inline=False
+            )
+
+            embed.set_footer(text="EwoBot Ekonomi Sistemi")
+
+            return await ctx.send(embed=embed)
+
+        # Para gönderme işlemi
         collection.update_one(
             {"_id": str(ctx.author.id)},
             {
@@ -1041,13 +1080,13 @@ async def paragonder(ctx, member: discord.Member, miktar: int):
             {"$inc": {"para": -miktar}}
         )
 
-    # alıcıya para ekle
+    # Alıcıya para ekle
     collection.update_one(
         {"_id": str(member.id)},
         {"$inc": {"para": miktar}}
     )
 
-    # embed mesaj
+    # Başarılı transfer embed
     embed = discord.Embed(
         title="💸 Para Transferi Başarılı",
         color=discord.Color.green()
@@ -1076,6 +1115,13 @@ async def paragonder(ctx, member: discord.Member, miktar: int):
     embed.set_footer(text="EwoBot Ekonomi Sistemi")
 
     await ctx.send(embed=embed)
+
+def get_max_bet(user):
+
+    if is_premium(user):
+        return 250000
+
+    return 100000
 
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
@@ -2481,6 +2527,290 @@ async def drop(ctx, miktar: int, zaman: str):
         f"📨 Gönderilen: **{basarili}**\n"
         f"❌ Başarısız: **{basarisiz}**"
     )
+class BolgeSelect(discord.ui.Select):
+
+    def __init__(self):
+
+        options = []
+
+        for isim, veri in BOLGELER.items():
+
+            options.append(
+                discord.SelectOption(
+                    label=isim.capitalize(),
+                    description=f"Fiyat: {formatla(veri['fiyat'])} | Saatlik: {formatla(veri['gelir'])}"
+                )
+            )
+
+        super().__init__(
+            placeholder="Bölge seç...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+
+        secilen = self.values[0].lower()
+        veri = BOLGELER[secilen]
+
+        embed = discord.Embed(
+            title=f"🌍 {secilen.capitalize()}",
+            color=0x2f3136
+        )
+
+        embed.add_field(
+            name="💰 Fiyat",
+            value=f"{formatla(veri['fiyat'])} Ewocoin",
+            inline=False
+        )
+
+        embed.add_field(
+            name="📈 Saatlik Gelir",
+            value=f"{formatla(veri['gelir'])} Ewocoin",
+            inline=False
+        )
+
+        embed.set_footer(text="Satın almak için: qbölgeal <isim>")
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
+
+class BolgeMenu(discord.ui.View):
+
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+        self.add_item(BolgeSelect())
+
+    async def interaction_check(self, interaction):
+
+        if interaction.user != self.author:
+            await interaction.response.send_message(
+                "❌ Bu menüyü sadece komutu kullanan kişi kullanabilir.",
+                ephemeral=True
+            )
+            return False
+
+        return True
+
+
+@bot.command()
+async def bölgeler(ctx):
+
+    user = get_user(ctx.author.id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Mafyada değilsin.")
+
+    embed = discord.Embed(
+        title="🌍 Mafya Bölgeleri",
+        description="Aşağıdan bölge seçip detaylarını görebilirsin.",
+        color=0x2f3136
+    )
+
+    await ctx.send(embed=embed, view=BolgeMenu(ctx.author))
+
+@bot.command()
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def bölgeal(ctx, isim: str, miktar: int = 1):
+
+    isim = isim.lower()
+
+    if isim not in BOLGELER:
+        return await ctx.send("❌ Geçersiz bölge.")
+
+    if miktar <= 0:
+        return await ctx.send("❌ Miktar 1 veya daha büyük olmalı.")
+
+    user = get_user(ctx.author.id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Mafyada değilsin.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    # yetki kontrol
+    roles = mafia["roles"]
+
+    user_role = next(
+        (r for r in roles if r["name"] == user.get("mafia_custom_role")),
+        None
+    )
+
+    if user.get("mafia_role") != "leader":
+        if not user_role or not user_role.get("manager"):
+            return await ctx.send("❌ Bölge satın alma yetkin yok.")
+
+    mevcut = mafia.get("regions", {}).get(isim, 0)
+
+    if mevcut + miktar > 5:
+        return await ctx.send("❌ Bir bölgeden en fazla **5 tane** alabilirsiniz.")
+
+    temel_fiyat = BOLGELER[isim]["fiyat"]
+
+    toplam_fiyat = 0
+
+    # fiyat artış sistemi (%20)
+    for i in range(miktar):
+
+        fiyat = int(temel_fiyat * (1 + (mevcut + i) * 0.20))
+        toplam_fiyat += fiyat
+
+    if mafia["bank"] < toplam_fiyat:
+        return await ctx.send(f"❌ Mafya kasasında **{formatla(toplam_fiyat)}** Ewocoin yok.")
+
+    mafia_col.update_one(
+        {"_id": mafia["_id"]},
+        {
+            "$inc": {
+                "bank": -toplam_fiyat,
+                f"regions.{isim}": miktar
+            }
+        }
+    )
+
+    sonraki_fiyat = int(temel_fiyat * (1 + (mevcut + miktar) * 0.20))
+
+    embed = discord.Embed(
+        title="🌍 Bölge Satın Alındı",
+        color=discord.Color.green()
+    )
+
+    embed.add_field(
+        name="🌍 Bölge",
+        value=isim.capitalize(),
+        inline=True
+    )
+
+    embed.add_field(
+        name="📦 Alınan",
+        value=f"{miktar} adet",
+        inline=True
+    )
+
+    embed.add_field(
+        name="💰 Ödenen",
+        value=f"{formatla(toplam_fiyat)} Ewocoin",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📈 Sonraki Fiyat",
+        value=f"{formatla(sonraki_fiyat)} Ewocoin",
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def bölgeparaçek(ctx):
+
+    user = get_user(ctx.author.id)
+
+    if not user.get("mafia_id"):
+        return await ctx.send("❌ Mafyada değilsin.")
+
+    mafia = mafia_col.find_one({"_id": user["mafia_id"]})
+
+    if ctx.author.id != int(mafia["leader"]):
+        return await ctx.send("❌ Sadece mafya lideri gelir çekebilir.")
+
+    regions = mafia.get("regions", {})
+
+    if not regions:
+        return await ctx.send("❌ Mafyanın bölgesi yok.")
+
+    now = int(time.time())
+    last = mafia.get("last_region_collect", now)
+
+    gecen_saat = int((now - last) / 3600)
+
+    if gecen_saat <= 0:
+        return await ctx.send("❌ Henüz gelir oluşmadı.")
+
+    if gecen_saat >= 26:
+        mafia_col.update_one(
+            {"_id": mafia["_id"]},
+            {"$set": {"last_region_collect": now}}
+        )
+
+        return await ctx.send("💥 Bölge gelirleri 26 saat çekilmediği için **yanmış**.")
+
+    hesaplanan = min(gecen_saat, 24)
+
+    toplam_gelir = 0
+
+    for bolge, adet in regions.items():
+
+        veri = BOLGELER[bolge]
+
+        toplam_gelir += veri["gelir"] * adet * hesaplanan
+
+    # 🎲 olay sistemi
+    sans = random.randint(1, 100)
+
+    olay_mesaj = ""
+    net_kazanc = toplam_gelir
+
+    if sans <= 70:
+
+        olay_mesaj = "✅ Bölge sorunsuz çalıştı."
+
+    elif sans <= 90:
+
+        kayip = int(toplam_gelir * 0.20)
+        net_kazanc -= kayip
+
+        olay_mesaj = f"⚠️ Küçük bir olay çıktı (-{formatla(kayip)} Ewocoin)"
+
+    elif sans <= 97:
+
+        kayip = int(toplam_gelir * 0.45)
+        net_kazanc -= kayip
+
+        olay_mesaj = f"🔥 Orta seviyede sorun çıktı (-{formatla(kayip)} Ewocoin)"
+
+    else:
+
+        kayip = int(toplam_gelir * 0.70)
+        net_kazanc -= kayip
+
+        olay_mesaj = f"💥 Büyük bir kriz çıktı (-{formatla(kayip)} Ewocoin)"
+
+    mafia_col.update_one(
+        {"_id": mafia["_id"]},
+        {
+            "$inc": {"bank": net_kazanc},
+            "$set": {"last_region_collect": now}
+        }
+    )
+
+    embed = discord.Embed(
+        title="🌍 Bölge Geliri Toplandı",
+        color=discord.Color.dark_gold()
+    )
+
+    embed.add_field(
+        name="⏳ Hesaplanan Süre",
+        value=f"{hesaplanan} Saat",
+        inline=False
+    )
+
+    embed.add_field(
+        name="💰 Net Kazanç",
+        value=f"{formatla(net_kazanc)} Ewocoin",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📊 Olay",
+        value=olay_mesaj,
+        inline=False
+    )
+
+    embed.set_footer(text="EwoBot Bölge Sistemi")
+
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def dmduyuru(ctx, *, mesaj):
@@ -6116,7 +6446,7 @@ async def baskın(ctx, member: discord.Member, *, isletme: str):
 
     await ctx.send(mesaj)
 
-@bot.command(name="mafyakur")
+@@bot.command(name="mafyakur")
 @commands.cooldown(1, 7, commands.BucketType.user)
 async def mafyakur(ctx, isim: str):
 
@@ -6148,12 +6478,15 @@ async def mafyakur(ctx, isim: str):
         "guild": ctx.guild.id,
         "war": None,
 
-        # ⭐ Mafya rol sistemi
         "roles": [
             {"name": "Mafya Lideri", "rank": 10, "manager": True},
-            {"name": "Mafya Yöneticisi", "rank": 7, "manager": False},
+            {"name": "Mafya Yöneticisi", "rank": 7, "manager": True},
             {"name": "Mafya Üyesi", "rank": 1, "manager": False}
-        ]
+        ],
+
+        # 🌍 BÖLGE SİSTEMİ
+        "regions": {},
+        "last_region_collect": int(time.time())
     }
 
     mafia_col.insert_one(mafia)
@@ -6493,57 +6826,103 @@ async def mafyabaskın(ctx, isim):
     user = get_user(ctx.author.id)
 
     if not user.get("mafia_id"):
+        ctx.command.reset_cooldown(ctx)
         return await ctx.send("❌ Bir mafyada değilsin.")
 
     attacker = mafia_col.find_one({"_id": user["mafia_id"]})
-    defender = mafia_col.find_one({"name": isim})
+
+    defender = mafia_col.find_one({
+        "name": {"$regex": f"^{re.escape(isim)}$", "$options": "i"}
+    })
 
     if not defender:
+        ctx.command.reset_cooldown(ctx)
         return await ctx.send("❌ Mafya bulunamadı.")
 
     if attacker["_id"] == defender["_id"]:
+        ctx.command.reset_cooldown(ctx)
         return await ctx.send("❌ Kendi mafyana saldıramazsın.")
 
-    kasa = defender.get("bank", 0)
+    # saldıran kasa kontrol
+    if attacker.get("bank", 0) < 25000:
+        ctx.command.reset_cooldown(ctx)
+        return await ctx.send("❌ Baskın atmak için mafya kasasında en az **25.000 Ewocoin** olmalı.")
 
-    if kasa <= 0:
-        return await ctx.send("❌ Bu mafyanın kasasında para yok.")
+    # savunan kasa kontrol
+    defender_bank = defender.get("bank", 0)
 
-    # maksimum çalınabilecek miktar (%25)
-    max_steal = int(kasa * 0.25)
+    if defender_bank < 30000:
+        ctx.command.reset_cooldown(ctx)
+        return await ctx.send("❌ Baskın atılan mafyanın kasasında en az **30.000 Ewocoin** olmalı.")
 
-    # rastgele çalınacak para
-    stolen = random.randint(int(max_steal * 0.5), max_steal)
+    # saldırı ihtimali
+    chance = random.randint(1, 100)
 
-    mafia_col.update_one(
-        {"_id": defender["_id"]},
-        {"$inc": {"bank": -stolen}}
-    )
+    embed = discord.Embed(title="💣 MAFYA BASKINI")
 
-    mafia_col.update_one(
-        {"_id": attacker["_id"]},
-        {"$inc": {"bank": stolen}}
-    )
+    embed.add_field(name="Saldıran Mafya", value=attacker["name"])
+    embed.add_field(name="Savunma Mafyası", value=defender["name"])
 
-    embed = discord.Embed(
-        title="💣 MAFYA BASKINI",
-        color=0xff0000
-    )
+    # =================
+    # BAŞARILI BASKIN (%40)
+    # =================
+    if chance <= 40:
 
-    embed.add_field(
-        name="Saldıran Mafya",
-        value=attacker["name"]
-    )
+        max_steal = int(defender_bank * 0.25)
+        stolen = random.randint(int(max_steal * 0.5), max_steal)
 
-    embed.add_field(
-        name="Savunma Mafyası",
-        value=defender["name"]
-    )
+        mafia_col.update_one(
+            {"_id": defender["_id"]},
+            {"$inc": {"bank": -stolen}}
+        )
 
-    embed.add_field(
-        name="💰 Çalınan Para",
-        value=f"{stolen:,}"
-    )
+        mafia_col.update_one(
+            {"_id": attacker["_id"]},
+            {"$inc": {"bank": stolen}}
+        )
+
+        embed.color = 0x00ff00
+        embed.add_field(
+            name="⚔️ Sonuç",
+            value="Saldırı başarılı oldu!"
+        )
+
+        embed.add_field(
+            name="💰 Çalınan Para",
+            value=f"{stolen:,} Ewocoin",
+            inline=False
+        )
+
+    # =================
+    # SAVUNMA (%60)
+    # =================
+    else:
+
+        attacker_bank = attacker.get("bank", 0)
+
+        penalty = int(attacker_bank * 0.10)
+
+        mafia_col.update_one(
+            {"_id": attacker["_id"]},
+            {"$inc": {"bank": -penalty}}
+        )
+
+        mafia_col.update_one(
+            {"_id": defender["_id"]},
+            {"$inc": {"bank": penalty}}
+        )
+
+        embed.color = 0xff0000
+        embed.add_field(
+            name="🛡️ Sonuç",
+            value="Savunan mafya saldırıyı **bertaraf etti!**"
+        )
+
+        embed.add_field(
+            name="💸 Ceza",
+            value=f"Saldıran mafyanın kasasından **{penalty:,} Ewocoin** alındı.",
+            inline=False
+        )
 
     await ctx.send(embed=embed)
 
