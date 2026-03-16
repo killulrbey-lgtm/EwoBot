@@ -369,7 +369,6 @@ async def profil_karti_olustur(ctx, user):
     font_text = ImageFont.truetype("Poppins-Bold.ttf", 18)
 
     # AVATAR
-
     avatar_url = ctx.author.display_avatar.url
 
     async with aiohttp.ClientSession() as session:
@@ -386,7 +385,6 @@ async def profil_karti_olustur(ctx, user):
     img.paste(avatar,(40,40),mask)
 
     # DATA
-
     para = user.get("para",0)
     banka = user.get("banka",0)
     faiz = int(banka*0.05)
@@ -423,12 +421,10 @@ async def profil_karti_olustur(ctx, user):
         es_name = "Yok"
 
     # TITLE
-
     draw.text((180,45), f"{ctx.author.name} Hesabı", font=font_title, fill=(255,255,255))
 
-    y = 170
-
     # EKONOMİ
+    y = 170
 
     draw.text((50,y),"━━ EKONOMİ ━━",font=font_cat,fill=(80,200,255))
     y += 30
@@ -442,7 +438,6 @@ async def profil_karti_olustur(ctx, user):
     draw.text((60,y),f"Faiz: {formatla(faiz)}",font=font_text,fill=(255,255,255))
 
     # MESLEK
-
     y = 170
 
     draw.text((420,y),"━━ MESLEK ━━",font=font_cat,fill=(255,200,120))
@@ -454,7 +449,6 @@ async def profil_karti_olustur(ctx, user):
     draw.text((430,y),f"Maaş: {formatla(maas)}",font=font_text,fill=(255,255,255))
 
     # PVP
-
     y = 260
 
     draw.text((50,y),"━━ PVP ━━",font=font_cat,fill=(255,180,120))
@@ -469,7 +463,6 @@ async def profil_karti_olustur(ctx, user):
     draw.text((60,y),f"Lose: {lose}",font=font_text,fill=(255,255,255))
 
     # EVLİLİK
-
     y = 260
 
     draw.text((420,y),"━━ EVLİLİK ━━",font=font_cat,fill=(255,140,200))
@@ -478,8 +471,7 @@ async def profil_karti_olustur(ctx, user):
     draw.text((430,y),f"Eşi: {es_name}",font=font_text,fill=(255,255,255))
 
     # ROZET
-
-    y = 330
+    y = 360
 
     draw.text((50,y),"━━ ROZET ━━",font=font_cat,fill=(255,220,120))
     y += 30
@@ -487,14 +479,12 @@ async def profil_karti_olustur(ctx, user):
     draw.text((60,y),f"{rozet}",font=font_text,fill=(255,255,255))
 
     # VARLIKLAR
-
     y = 330
 
     draw.text((420,y),"━━ VARLIKLAR ━━",font=font_cat,fill=(120,220,255))
     y += 30
 
     yatirimlar = user.get("yatirimlar",{}) or {}
-
     text = ""
 
     for v,a in yatirimlar.items():
@@ -507,19 +497,16 @@ async def profil_karti_olustur(ctx, user):
     draw.text((430,y),text,font=font_text,fill=(255,255,255))
 
     # İŞLETMELER
-
     y = 400
 
     draw.text((50,y),"━━ İŞLETMELER ━━",font=font_cat,fill=(120,255,180))
     y += 30
 
     isletmeler = user.get("isletmeler",{}) or {}
-
     text2 = ""
 
     for i,v in isletmeler.items():
         adet = v.get("adet",0)
-
         if adet > 0:
             text2 += f"{i}:{adet} "
 
@@ -529,7 +516,6 @@ async def profil_karti_olustur(ctx, user):
     draw.text((60,y),text2,font=font_text,fill=(255,255,255))
 
     # FOOTER
-
     draw.text((20,470),"EwoBot Ekonomi Sistemi",font=font_text,fill=(150,150,150))
 
     buffer = io.BytesIO()
