@@ -1736,34 +1736,36 @@ LOG_GUILD = 1471843922115301493
 LOG_CHANNEL = 1483051326840635442
 
 @bot.command()
-@commands.cooldown(1, 4, commands.BucketType.user)
-async def qhesaparkaplan(ctx, url):
+async def qhesaparkaplan(ctx):
 
     user = get_user(ctx.author.id)
 
+    if not ctx.message.attachments:
+        return await ctx.send("❌ Bir resim dosyası eklemelisin.")
+
+    attachment = ctx.message.attachments[0]
+    url = attachment.url
+
     para = user.get("para",0)
 
-    if para < ARKAPLAN_FIYAT:
+    if para < 100000:
         return await ctx.send("❌ Bunun için **100.000 EwoCoin** gerekli.")
 
-    # para düş
+    # para kes
     collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$inc": {"para": -ARKAPLAN_FIYAT}}
+        {"$inc": {"para": -100000}}
     )
 
-    guild = bot.get_guild(LOG_GUILD)
-    channel = guild.get_channel(LOG_CHANNEL)
+    guild = bot.get_guild(1471843922115301493)
+    channel = guild.get_channel(1483051326840635442)
 
     embed = discord.Embed(
-        title="Yeni Arkaplan İsteği",
+        title="Yeni Hesap Arkaplan İsteği",
         description=f"""
 Kullanıcı: {ctx.author}
-
 Sunucu: {ctx.guild.name}
-
-URL:
-{url}
+ID: {ctx.author.id}
 """,
         color=0xffcc00
     )
