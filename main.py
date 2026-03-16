@@ -135,7 +135,7 @@ BOLGELER = {
     "Silahpazari": {"fiyat": 1750000, "gelir": 18000},
     "Kumarhane": {"fiyat": 2500000, "gelir": 28000},
     "Benzinlik": {"fiyat": 3750000, "gelir": 45000},
-    "Petrolsahasi": {"fiyat": 5000000, "gelir": 80000}
+    "Petrolsahasi": {"fiyat": 5000000, "gelir": 80000},
     "Silahfabrikasi": {"fiyat": 7500000, "gelir": 110000},
     "Yeraltisehri": {"fiyat": 11000000, "gelir": 145000}
 
