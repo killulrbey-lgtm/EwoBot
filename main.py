@@ -2847,7 +2847,7 @@ async def durum_degistir():
 
     # 2 farklı durum
     if durum_degistir.counter % 2 == 0:
-        await bot.change_presence(activity=discord.Game(name="q!yardım | q!davet | prefix: q!"))
+        await bot.change_presence(activity=discord.Game(name="q!yardım | q!öneriver | prefix: q!"))
     else:
         await bot.change_presence(activity=discord.Game(name=f"{sunucu_sayisi} Sunucu | {oyuncu_sayisi} Oyuncu"))
 
@@ -3483,6 +3483,44 @@ async def logpanel(ctx):
     view.add_item(buton)
 
     await ctx.send("⚙️ Admin Log Paneli", view=view)
+
+TAG = "EWO"
+GUILD_ID = 1471843922115301493
+ROLE_ID = 1483192500486275276
+
+
+@bot.event
+async def on_member_update(before, after):
+
+    if after.guild.id != GUILD_ID:
+        return
+
+    role = after.guild.get_role(ROLE_ID)
+
+    if not role:
+        return
+
+    # TAG VARSA
+    if TAG in after.display_name:
+        if role not in after.roles:
+            await after.add_roles(role, reason="Guild tag kullandığı için rol verildi")
+
+    # TAG YOKSA
+    else:
+        if role in after.roles:
+            await after.remove_roles(role, reason="Guild tag kaldırıldığı için rol alındı")
+
+
+@bot.event
+async def on_member_join(member):
+
+    if member.guild.id != GUILD_ID:
+        return
+
+    role = member.guild.get_role(ROLE_ID)
+
+    if TAG in member.display_name:
+        await member.add_roles(role, reason="Guild tag ile giriş yaptı")
 
 # ===============================
 # YENİ INVITE OLUŞURSA CACHE GÜNCELLE
