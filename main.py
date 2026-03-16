@@ -894,6 +894,52 @@ MARKET_URUNLERI = {
     "Olta": {"fiyat": 1000}
 }
 
+LEVEL_LIMITS = {
+    1: 50000,
+    2: 60000,
+    3: 75000,
+    4: 90000,
+    5: 100000,
+    6: 125000,
+    7: 145000,
+    8: 165000,
+    9: 200000,
+    10: 250000,
+    12: 275000,
+    15: 325000,
+    17: 375000,
+    20: 450000,
+    25: 550000,
+    30: 650000,
+    35: 700000,
+    40: 750000,
+    45: 900000,
+    50: 1000000,
+    60: 1500000,
+}
+
+# LEVEL LIMIT HESAPLAMA
+def get_level_limit(level):
+
+    limit = 50000
+
+    for lvl, val in sorted(LEVEL_LIMITS.items()):
+        if level >= lvl:
+            limit = val
+
+    return limit
+
+
+# KALAN SÜRE
+def kalan_sure(saniye):
+
+    saat = saniye // 3600
+    saniye %= 3600
+    dakika = saniye // 60
+    saniye %= 60
+
+    return f"{saat} Saat {dakika} Dakika {saniye} Saniye"
+
 @bot.command()
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def param(ctx):
@@ -921,31 +967,110 @@ async def param(ctx):
         f"💰 {ctx.author.mention}, Paran: **{formatla(user['para'])} EwoCoin**"
     )
 
-@bot.command()
-@commands.cooldown(1, 4, commands.BucketType.user)
-async def paragönder(ctx, member: discord.Member, miktar: int):
+@bot.command(name="paragönder")
+async def paragonder(ctx, member: discord.Member, miktar: int):
+
+    if member == ctx.author:
+        return await ctx.send("❌ Kendine para gönderemezsin")
+
+    if member.bot:
+        return await ctx.send("❌ Botlara para gönderemezsin")
 
     if miktar <= 0:
         return await ctx.send("❌ Geçersiz miktar")
 
-    sender = get_user(ctx.author.id)
+    user = get_user(ctx.author.id)
 
-    if sender["para"] < miktar:
-        return await ctx.send("❌ Yetersiz bakiye")
+    if user["para"] < miktar:
+        return await ctx.send("❌ Yeterli paran yok")
 
+    level = user.get("level", 1)
+
+    # Level'e göre limit
+    limit = get_level_limit(level)
+
+    # Premium kontrol
+    if user.get("premium_until", 0) > int(time.time()):
+        limit *= 2
+
+    now = int(time.time())
+
+    gunluk = user.get("gonderilen_para", 0)
+    reset = user.get("gonderilen_reset", now)
+
+    # Reset zamanı geldiyse sıfırla
+    if now >= reset:
+        gunluk = 0
+        reset = now + 86400
+
+    # Limit kontrol
+    if gunluk + miktar > limit:
+
+        kalan = reset - now
+
+        return await ctx.send(
+            f"❌ Günlük **{formatla(limit)}** transfer limitine ulaştın\n"
+            f"⏳ **{kalan_sure(kalan)}** boyunca para gönderemezsin"
+        )
+
+    # Database güncelle
     collection.update_one(
         {"_id": str(ctx.author.id)},
-        {"$inc": {"para": -miktar}}
+        {
+            "$inc": {
+                "para": -miktar,
+                "gonderilen_para": miktar
+            },
+            "$set": {
+                "gonderilen_reset": reset
+            }
+        }
     )
 
     collection.update_one(
         {"_id": str(member.id)},
-        {"$inc": {"para": miktar}},
-        upsert=True
+        {"$inc": {"para": miktar}}
     )
 
-    await ctx.send(f"✅ {member.mention} kişisine {formatla(miktar)} EwoCoin gönderildi")
-    await xp_ekle(ctx.author.id, 5)
+    # Embed mesaj
+    embed = discord.Embed(
+        title="💸 Para Transferi Başarılı",
+        color=discord.Color.green()
+    )
+
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+
+    embed.add_field(
+        name="👤 Gönderen",
+        value=ctx.author.mention,
+        inline=True
+    )
+
+    embed.add_field(
+        name="📥 Alıcı",
+        value=member.mention,
+        inline=True
+    )
+
+    embed.add_field(
+        name="💰 Gönderilen Miktar",
+        value=f"{formatla(miktar)} EwoCoin",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📊 Günlük Transfer Bilgisi",
+        value=(
+            f"Limit: **{formatla(limit)}**\n"
+            f"Kullanılan: **{formatla(gunluk + miktar)}**\n"
+            f"Kalan: **{formatla(limit - (gunluk + miktar))}**"
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text="EwoBot Ekonomi Sistemi")
+
+    await ctx.send(embed=embed)
 
 def get_max_bet(user):
 
@@ -1246,67 +1371,13 @@ import datetime
 
 # BANKA PARA ÇEKME KOMUDU
 
-@bot.command(name="bankaçek")
-@commands.cooldown(1, 4, commands.BucketType.user)
-async def bankaçek(ctx, miktar: str):
-
-    user = get_user(ctx.author.id)
-
-    if miktar.lower() == "all":
-        miktar = user["banka"]
-    else:
-        try:
-            miktar = int(miktar)
-        except:
-            return await ctx.send("❌ Geçerli bir miktar yaz")
-
-    if miktar <= 0:
-        return await ctx.send("❌ Geçersiz miktar")
-
-    if user["banka"] < miktar:
-        return await ctx.send("❌ Banka bakiyeniz yeterli değil")
-
-    once_nakit = user["para"]
-    once_banka = user["banka"]
-
-    sonra_nakit = once_nakit + miktar
-    sonra_banka = once_banka - miktar
-
-    collection.update_one(
-        {"_id": str(ctx.author.id)},
-        {"$inc": {"para": miktar, "banka": -miktar}}
-    )
-
-    embed = discord.Embed(
-        title=f"🏦 {ctx.author.name} Kullanıcısının Banka Hesabı",
-        color=discord.Color.gold()
-    )
-
-    embed.add_field(
-        name="💵 Nakit Para",
-        value=f"Önce: {formatla(once_nakit)}\nSonra: {formatla(sonra_nakit)}",
-        inline=False
-    )
-
-    embed.add_field(
-        name="🏦 Banka Hesabı",
-        value=f"Önce: {formatla(once_banka)}\nSonra: {formatla(sonra_banka)}",
-        inline=False
-    )
-
-    embed.set_thumbnail(url=ctx.author.avatar.url)
-    embed.set_footer(text="EwoBot Banka Sistemi")
-
-    await ctx.send(embed=embed)
-
-# BANKAYATIR KOMUDU
-
 @bot.command(name="bankayatır")
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def bankayatır(ctx, miktar: str):
 
     user = get_user(ctx.author.id)
 
+    # ALL kontrolü
     if miktar.lower() == "all":
         miktar = user["para"]
     else:
@@ -1327,14 +1398,100 @@ async def bankayatır(ctx, miktar: str):
     sonra_nakit = once_nakit - miktar
     sonra_banka = once_banka + miktar
 
+    # Database güncelle
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": -miktar, "banka": miktar}}
     )
 
+    # Embed
     embed = discord.Embed(
         title=f"🏦 {ctx.author.name} Kullanıcısının Banka Hesabı",
-        color=discord.Color.gold()
+        color=discord.Color.green()
+    )
+
+    embed.add_field(
+        name="💳 İşlem",
+        value="Bankaya Para Yatırma",
+        inline=False
+    )
+
+    embed.add_field(
+        name="💰 İşlem Miktarı",
+        value=f"{formatla(miktar)} EwoCoin",
+        inline=False
+    )
+
+    embed.add_field(
+        name="💵 Nakit Para",
+        value=f"Önce: {formatla(once_nakit)}\nSonra: {formatla(sonra_nakit)}",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🏦 Banka Hesabı",
+        value=f"Önce: {formatla(once_banka)}\nSonra: {formatla(sonra_banka)}",
+        inline=False
+    )
+
+    embed.set_thumbnail(url=ctx.author.avatar.url)
+    embed.set_footer(text="EwoBot Banka Sistemi")
+
+    await ctx.send(embed=embed)
+
+
+
+# ================= BANKA ÇEKME =================
+
+@bot.command(name="bankaçek")
+@commands.cooldown(1, 4, commands.BucketType.user)
+async def bankaçek(ctx, miktar: str):
+
+    user = get_user(ctx.author.id)
+
+    # ALL kontrolü
+    if miktar.lower() == "all":
+        miktar = user["banka"]
+    else:
+        try:
+            miktar = int(miktar)
+        except:
+            return await ctx.send("❌ Geçerli bir miktar yaz")
+
+    if miktar <= 0:
+        return await ctx.send("❌ Geçersiz miktar")
+
+    if user["banka"] < miktar:
+        return await ctx.send("❌ Banka bakiyen yeterli değil")
+
+    once_nakit = user["para"]
+    once_banka = user["banka"]
+
+    sonra_nakit = once_nakit + miktar
+    sonra_banka = once_banka - miktar
+
+    # Database güncelle
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": miktar, "banka": -miktar}}
+    )
+
+    # Embed
+    embed = discord.Embed(
+        title=f"🏦 {ctx.author.name} Kullanıcısının Banka Hesabı",
+        color=discord.Color.red()
+    )
+
+    embed.add_field(
+        name="💳 İşlem",
+        value="Bankadan Para Çekme",
+        inline=False
+    )
+
+    embed.add_field(
+        name="💰 İşlem Miktarı",
+        value=f"{formatla(miktar)} EwoCoin",
+        inline=False
     )
 
     embed.add_field(
