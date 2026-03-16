@@ -1246,45 +1246,113 @@ import datetime
 
 # BANKA PARA ÇEKME KOMUDU
 
-@bot.command()
+@bot.command(name="bankaçek")
 @commands.cooldown(1, 4, commands.BucketType.user)
-async def bankaçek(ctx, miktar: int):
+async def bankaçek(ctx, miktar: str):
+
+    user = get_user(ctx.author.id)
+
+    if miktar.lower() == "all":
+        miktar = user["banka"]
+    else:
+        try:
+            miktar = int(miktar)
+        except:
+            return await ctx.send("❌ Geçerli bir miktar yaz")
 
     if miktar <= 0:
         return await ctx.send("❌ Geçersiz miktar")
 
-    user = get_user(ctx.author.id)
-
     if user["banka"] < miktar:
         return await ctx.send("❌ Banka bakiyeniz yeterli değil")
+
+    once_nakit = user["para"]
+    once_banka = user["banka"]
+
+    sonra_nakit = once_nakit + miktar
+    sonra_banka = once_banka - miktar
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": miktar, "banka": -miktar}}
     )
 
-    await ctx.send(f"🏦 {ctx.author.mention}, bankadan {formatla(miktar)} EwoCoin çektiniz")
+    embed = discord.Embed(
+        title=f"🏦 {ctx.author.name} Kullanıcısının Banka Hesabı",
+        color=discord.Color.gold()
+    )
+
+    embed.add_field(
+        name="💵 Nakit Para",
+        value=f"Önce: {formatla(once_nakit)}\nSonra: {formatla(sonra_nakit)}",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🏦 Banka Hesabı",
+        value=f"Önce: {formatla(once_banka)}\nSonra: {formatla(sonra_banka)}",
+        inline=False
+    )
+
+    embed.set_thumbnail(url=ctx.author.avatar.url)
+    embed.set_footer(text="EwoBot Banka Sistemi")
+
+    await ctx.send(embed=embed)
 
 # BANKAYATIR KOMUDU
 
-@bot.command()
+@bot.command(name="bankayatır")
 @commands.cooldown(1, 4, commands.BucketType.user)
-async def bankayatır(ctx, miktar: int):
+async def bankayatır(ctx, miktar: str):
+
+    user = get_user(ctx.author.id)
+
+    if miktar.lower() == "all":
+        miktar = user["para"]
+    else:
+        try:
+            miktar = int(miktar)
+        except:
+            return await ctx.send("❌ Geçerli bir miktar yaz")
 
     if miktar <= 0:
         return await ctx.send("❌ Geçersiz miktar")
 
-    user = get_user(ctx.author.id)
-
     if user["para"] < miktar:
-        return await ctx.send("❌ Paran yok")
+        return await ctx.send("❌ Yeterli nakit paran yok")
+
+    once_nakit = user["para"]
+    once_banka = user["banka"]
+
+    sonra_nakit = once_nakit - miktar
+    sonra_banka = once_banka + miktar
 
     collection.update_one(
         {"_id": str(ctx.author.id)},
         {"$inc": {"para": -miktar, "banka": miktar}}
     )
 
-    await ctx.send(f"🏦 {ctx.author.mention}, bankaya {formatla(miktar)} EwoCoin yatırdınız")
+    embed = discord.Embed(
+        title=f"🏦 {ctx.author.name} Kullanıcısının Banka Hesabı",
+        color=discord.Color.gold()
+    )
+
+    embed.add_field(
+        name="💵 Nakit Para",
+        value=f"Önce: {formatla(once_nakit)}\nSonra: {formatla(sonra_nakit)}",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🏦 Banka Hesabı",
+        value=f"Önce: {formatla(once_banka)}\nSonra: {formatla(sonra_banka)}",
+        inline=False
+    )
+
+    embed.set_thumbnail(url=ctx.author.avatar.url)
+    embed.set_footer(text="EwoBot Banka Sistemi")
+
+    await ctx.send(embed=embed)
 
 @bot.command()
 @commands.cooldown(1, 86400, commands.BucketType.user)
@@ -3483,33 +3551,6 @@ async def logpanel(ctx):
     view.add_item(buton)
 
     await ctx.send("⚙️ Admin Log Paneli", view=view)
-
-TAG = "EWO"
-GUILD_ID = 1471843922115301493
-ROLE_ID = 1483192500486275276
-
-
-@bot.event
-async def on_member_update(before, after):
-
-    if after.guild.id != GUILD_ID:
-        return
-
-    role = after.guild.get_role(ROLE_ID)
-
-    if not role:
-        return
-
-    # TAG VARSA
-    if TAG in after.display_name:
-        if role not in after.roles:
-            await after.add_roles(role, reason="Guild tag kullandığı için rol verildi")
-
-    # TAG YOKSA
-    else:
-        if role in after.roles:
-            await after.remove_roles(role, reason="Guild tag kaldırıldığı için rol alındı")
-
 
 @bot.event
 async def on_member_join(member):
