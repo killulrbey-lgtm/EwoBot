@@ -362,6 +362,23 @@ async def profil_karti_olustur(ctx, user):
     height = 520
 
     img = Image.new("RGB", (width, height), (47,49,54))
+
+    # ARKAPLAN
+    background = user.get("profil_arkaplan")
+
+    if background:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(background) as resp:
+                    bg_bytes = await resp.read()
+
+            bg = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
+            bg = bg.resize((width, height))
+            img.paste(bg, (0,0))
+
+        except:
+            pass
+
     draw = ImageDraw.Draw(img)
 
     font_title = ImageFont.truetype("Poppins-Bold.ttf", 34)
@@ -430,7 +447,6 @@ async def profil_karti_olustur(ctx, user):
 
     # EKONOMİ
     y = 170
-
     draw.text((50,y),"━━ EKONOMİ ━━",font=font_cat,fill=(80,200,255))
     y += 30
 
@@ -444,7 +460,6 @@ async def profil_karti_olustur(ctx, user):
 
     # MESLEK
     y = 170
-
     draw.text((420,y),"━━ MESLEK ━━",font=font_cat,fill=(255,200,120))
     y += 30
 
@@ -454,8 +469,7 @@ async def profil_karti_olustur(ctx, user):
     draw.text((430,y),f"Maaş: {formatla(maas)}",font=font_text,fill=(255,255,255))
 
     # PVP
-    y = 270
-
+    y = 290
     draw.text((50,y),"━━ PVP ━━",font=font_cat,fill=(255,180,120))
     y += 30
 
@@ -463,11 +477,9 @@ async def profil_karti_olustur(ctx, user):
     y += 25
 
     draw.text((60,y),f"Win: {win}",font=font_text,fill=(255,255,255))
-    y += 25
 
     # EVLİLİK
     y = 260
-
     draw.text((420,y),"━━ EVLİLİK ━━",font=font_cat,fill=(255,140,200))
     y += 30
 
@@ -475,7 +487,6 @@ async def profil_karti_olustur(ctx, user):
 
     # ROZET
     y = 370
-
     draw.text((50,y),"━━ ROZET ━━",font=font_cat,fill=(255,220,120))
     y += 30
 
@@ -483,7 +494,6 @@ async def profil_karti_olustur(ctx, user):
 
     # VARLIKLAR
     y = 330
-
     draw.text((420,y),"━━ VARLIKLAR ━━",font=font_cat,fill=(120,220,255))
     y += 30
 
@@ -501,7 +511,6 @@ async def profil_karti_olustur(ctx, user):
 
     # İŞLETMELER
     y = 440
-
     draw.text((50,y),"━━ İŞLETMELER ━━",font=font_cat,fill=(120,255,180))
     y += 30
 
@@ -520,7 +529,6 @@ async def profil_karti_olustur(ctx, user):
 
     # MAFYA
     y = 420
-
     draw.text((420,y),"━━ MAFYA ━━",font=font_cat,fill=(255,80,80))
     y += 30
 
@@ -537,6 +545,50 @@ async def profil_karti_olustur(ctx, user):
     buffer.seek(0)
 
     return buffer
+
+class ArkaplanOnayView(discord.ui.View):
+
+    def __init__(self, user_id, url):
+        super().__init__(timeout=None)
+        self.user_id = user_id
+        self.url = url
+
+    @discord.ui.button(label="Onayla", style=discord.ButtonStyle.green)
+    async def onayla(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        collection.update_one(
+            {"_id": str(self.user_id)},
+            {"$set": {"profil_arkaplan": self.url}}
+        )
+
+        user = await bot.fetch_user(self.user_id)
+
+        try:
+            await user.send("✅ Profil arka planın **onaylandı**.")
+        except:
+            pass
+
+        await interaction.response.send_message("Arkaplan onaylandı.", ephemeral=True)
+        self.stop()
+
+
+    @discord.ui.button(label="Reddet", style=discord.ButtonStyle.red)
+    async def reddet(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        collection.update_one(
+            {"_id": str(self.user_id)},
+            {"$inc": {"banka": ARKAPLAN_FIYAT}}
+        )
+
+        user = await bot.fetch_user(self.user_id)
+
+        try:
+            await user.send("❌ Profil arka planın **reddedildi**. Para bankana iade edildi.")
+        except:
+            pass
+
+        await interaction.response.send_message("Arkaplan reddedildi.", ephemeral=True)
+        self.stop()
 
 GOREVLER = [
 
@@ -1678,6 +1730,51 @@ async def meslek_al(ctx, *, secim):
     )
 
     await ctx.send(f"✅ {ctx.author.mention}, artık {secim} mesleğine sahipsin!")
+
+ARKAPLAN_FIYAT = 100000
+LOG_GUILD = 1471843922115301493
+LOG_CHANNEL = 1483051326840635442
+
+@bot.command()
+@commands.cooldown(1, 4, commands.BucketType.user)
+async def qhesaparkaplan(ctx, url):
+
+    user = get_user(ctx.author.id)
+
+    para = user.get("para",0)
+
+    if para < ARKAPLAN_FIYAT:
+        return await ctx.send("❌ Bunun için **100.000 EwoCoin** gerekli.")
+
+    # para düş
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {"$inc": {"para": -ARKAPLAN_FIYAT}}
+    )
+
+    guild = bot.get_guild(LOG_GUILD)
+    channel = guild.get_channel(LOG_CHANNEL)
+
+    embed = discord.Embed(
+        title="Yeni Arkaplan İsteği",
+        description=f"""
+Kullanıcı: {ctx.author}
+
+Sunucu: {ctx.guild.name}
+
+URL:
+{url}
+""",
+        color=0xffcc00
+    )
+
+    embed.set_image(url=url)
+
+    view = ArkaplanOnayView(ctx.author.id, url)
+
+    await channel.send(embed=embed, view=view)
+
+    await ctx.send("✅ Arkaplan yetkililere gönderildi. Onay bekleniyor.")
 
 # =====================================================
 # 👤 HESAP KOMUTU (TÜM VARLIKLAR GÖSTERİR)
