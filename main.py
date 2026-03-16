@@ -359,7 +359,7 @@ async def xp_ekle(user_id, miktar):
 async def profil_karti_olustur(ctx, user):
 
     width = 820
-    height = 500
+    height = 520
 
     img = Image.new("RGB", (width, height), (47,49,54))
     draw = ImageDraw.Draw(img)
@@ -420,6 +420,11 @@ async def profil_karti_olustur(ctx, user):
     else:
         es_name = "Yok"
 
+    # MAFYA
+    mafia = user.get("mafia", {}) or {}
+    mafia_name = mafia.get("name", "Yok")
+    mafia_rank = mafia.get("rank", "Yok")
+
     # TITLE
     draw.text((180,45), f"{ctx.author.name} Hesabı", font=font_title, fill=(255,255,255))
 
@@ -449,7 +454,7 @@ async def profil_karti_olustur(ctx, user):
     draw.text((430,y),f"Maaş: {formatla(maas)}",font=font_text,fill=(255,255,255))
 
     # PVP
-    y = 260
+    y = 270
 
     draw.text((50,y),"━━ PVP ━━",font=font_cat,fill=(255,180,120))
     y += 30
@@ -460,8 +465,6 @@ async def profil_karti_olustur(ctx, user):
     draw.text((60,y),f"Win: {win}",font=font_text,fill=(255,255,255))
     y += 25
 
-    draw.text((60,y),f"Lose: {lose}",font=font_text,fill=(255,255,255))
-
     # EVLİLİK
     y = 260
 
@@ -471,7 +474,7 @@ async def profil_karti_olustur(ctx, user):
     draw.text((430,y),f"Eşi: {es_name}",font=font_text,fill=(255,255,255))
 
     # ROZET
-    y = 360
+    y = 370
 
     draw.text((50,y),"━━ ROZET ━━",font=font_cat,fill=(255,220,120))
     y += 30
@@ -497,7 +500,7 @@ async def profil_karti_olustur(ctx, user):
     draw.text((430,y),text,font=font_text,fill=(255,255,255))
 
     # İŞLETMELER
-    y = 400
+    y = 440
 
     draw.text((50,y),"━━ İŞLETMELER ━━",font=font_cat,fill=(120,255,180))
     y += 30
@@ -515,8 +518,19 @@ async def profil_karti_olustur(ctx, user):
 
     draw.text((60,y),text2,font=font_text,fill=(255,255,255))
 
+    # MAFYA
+    y = 420
+
+    draw.text((420,y),"━━ MAFYA ━━",font=font_cat,fill=(255,80,80))
+    y += 30
+
+    draw.text((430,y),f"Grup: {mafia_name}",font=font_text,fill=(255,255,255))
+    y += 25
+
+    draw.text((430,y),f"Rütbe: {mafia_rank}",font=font_text,fill=(255,255,255))
+
     # FOOTER
-    draw.text((20,470),"EwoBot Ekonomi Sistemi",font=font_text,fill=(150,150,150))
+    draw.text((20,495),"EwoBot Ekonomi Sistemi",font=font_text,fill=(150,150,150))
 
     buffer = io.BytesIO()
     img.save(buffer,"PNG")
