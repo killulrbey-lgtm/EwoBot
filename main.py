@@ -413,6 +413,119 @@ async def xp_ekle(user_id, miktar):
                 {"$inc": {"envanter.Premium Kasa": 1}}
             )
 
+def load_icon(name, size=(50,50)):
+    img = Image.open(f"assets/{name}").convert("RGBA")
+    return img.resize(size)
+
+async def ewopass_resim(user_obj, page=0):
+
+    user = get_user(user_obj.id)
+    ep = user["ewopass"]
+
+    level = ep["level"]
+    xp = ep["xp"]
+
+    width = 1500
+    height = 650
+
+    img = Image.new("RGBA", (width, height), (15, 18, 25))
+    draw = ImageDraw.Draw(img)
+
+    font_big = ImageFont.truetype("Poppins-Bold.ttf", 65)
+    font_mid = ImageFont.truetype("Poppins-Bold.ttf", 30)
+    font_small = ImageFont.truetype("Poppins-Bold.ttf", 22)
+
+    # ===== BAŞLIK =====
+    draw.text((50, 30), "EWO PASS", font=font_big, fill=(255,170,0))
+    draw.text((420, 50), "SEZON 1", font=font_mid, fill=(200,200,200))
+
+    draw.text((1200, 50), f"SAYFA {page+1}/2", font=font_mid, fill=(180,180,180))
+
+    # ===== BAŞLIKLAR =====
+    draw.text((50, 140), "FREE ÖDÜLLER", font=font_mid, fill=(255,255,255))
+    draw.text((50, 330), "EWOELITE ÖDÜLLER", font=font_mid, fill=(255,215,0))
+
+    start = page * 15 + 1
+    end = start + 14
+
+    icons = [
+        "para.png",
+        "kasa.png",
+        "altin_kasa.png",
+        "silah.png"
+    ]
+
+    x_start = 60
+
+    for i, lvl in enumerate(range(start, end+1)):
+
+        x = x_start + i * 95
+
+        icon_name = icons[lvl % len(icons)]
+        icon = load_icon(icon_name)
+
+        # ===== FREE =====
+        box_color = (60,130,200) if lvl <= level else (40,40,40)
+
+        draw.rounded_rectangle((x, 180, x+80, 260), radius=12, fill=box_color)
+
+        img.paste(icon, (x+15, 190), icon)
+
+        draw.text((x+25, 240), str(lvl), font=font_small, fill=(255,255,255))
+
+        # CLAIM TİK
+        if lvl <= level and lvl in ep.get("claimed_free", []):
+            tik = load_icon("tik.png", (30,30))
+            img.paste(tik, (x+45, 180), tik)
+
+        # ===== ELITE =====
+        if ep.get("elite"):
+            elite_color = (255,200,0) if lvl <= level else (70,70,70)
+        else:
+            elite_color = (25,25,25)
+
+        draw.rounded_rectangle((x, 370, x+80, 450), radius=12, fill=elite_color)
+
+        if ep.get("elite"):
+            img.paste(icon, (x+15, 380), icon)
+
+            if lvl <= level and lvl in ep.get("claimed_elite", []):
+                tik = load_icon("tik.png", (30,30))
+                img.paste(tik, (x+45, 370), tik)
+        else:
+            kilit = load_icon("kilit.png", (35,35))
+            img.paste(kilit, (x+22, 395), kilit)
+
+        draw.text((x+25, 430), str(lvl), font=font_small, fill=(255,255,255))
+
+    # ===== XP BAR =====
+    max_xp = level * 100
+    oran = min(xp / max_xp, 1)
+
+    bar_x = 250
+    bar_y = 520
+    bar_w = 900
+    bar_h = 30
+
+    draw.rounded_rectangle((bar_x, bar_y, bar_x+bar_w, bar_y+bar_h), 10, fill=(40,40,40))
+    draw.rounded_rectangle((bar_x, bar_y, bar_x + int(bar_w*oran), bar_y+bar_h), 10, fill=(255,180,0))
+
+    draw.text((bar_x, bar_y-40), f"XP: {xp} / {max_xp}", font=font_small, fill=(255,255,255))
+
+    # ===== BUTON =====
+    draw.rounded_rectangle((550, 570, 950, 630), 12, fill=(0,200,120))
+    draw.text((630, 585), "ÖDÜLLERİ TOPLA", font=font_mid, fill=(255,255,255))
+
+    # ===== ELITE DURUM =====
+    status = "AKTİF" if ep.get("elite") else "KAPALI"
+    draw.text((50, 600), f"EwoElite: {status}", font=font_small, fill=(255,120,120))
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    return buffer
+
 async def profil_karti_olustur(ctx, user):
 
     width = 820
@@ -1312,6 +1425,7 @@ async def cf(ctx, miktar: str):
         await ctx.send(f"💀 Kaybettin! -{formatla(miktar)}")
 
     await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
     await gorev_kontrol(ctx.author.id, "cf", 1)
     await rozet_kontrol(ctx.author.id)
 
@@ -1448,7 +1562,7 @@ async def slot(ctx, miktar: str):
 
     await msg.edit(content=f"{' | '.join(result)}\n{text}")
 
-    await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
     await gorev_kontrol(ctx.author.id, "slot", 1)
     await rozet_kontrol(ctx.author.id)
 
@@ -1474,7 +1588,7 @@ async def maas(ctx):
         }
     )
 
-    await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
     await ctx.send(f"💰 Maaşını aldın! +{formatla(maas_miktari)} EwoCoin")
 
 @bot.command(name="gunluk")
@@ -1508,6 +1622,7 @@ async def gunluk(ctx):
     )
 
     await xp_ekle(ctx.author.id, 10)
+    await ewopass_xp_ekle(ctx.author.id, 5)
 
     await ctx.send(
         f"🎁 Günlük ödülünü aldın!\n"
@@ -2300,6 +2415,7 @@ async def dilen(ctx):
         await ctx.send(f"🕴 Gizemli takım elbiseli adam {formatla(kazanc)} bıraktı!")
 
     await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
 
 # Çalış
 @bot.command(name="çalış")
@@ -2342,6 +2458,7 @@ async def calis(ctx):
     )
 
     await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
     await rozet_kontrol(ctx.author.id)
 
 # Ara
@@ -2396,6 +2513,7 @@ async def ara(ctx):
     )
 
     await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
 
 # Suç
 @bot.command(name="suç")
@@ -2444,6 +2562,7 @@ async def suc(ctx):
     )
 
     await xp_ekle(ctx.author.id, 6)
+    await ewopass_xp_ekle(ctx.author.id, 5)
 
 # Avlan
 @bot.command(name="avlan")
@@ -2479,6 +2598,7 @@ async def avlan(ctx):
     )
 
     await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
 
 @bot.command(name="al")
 @commands.cooldown(1, 5, commands.BucketType.user)
@@ -2867,6 +2987,7 @@ async def blackjack(ctx, miktar: str = None):
     await msg.edit(content=mesaj)
 
     await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
     await gorev_kontrol(ctx.author.id, "blackjack", 1)
     await rozet_kontrol(ctx.author.id)
 
@@ -2928,6 +3049,7 @@ async def zar(ctx, miktar: str):
     await ctx.send(mesaj)
 
     await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
     await gorev_kontrol(ctx.author.id, "zar", 1)
     await rozet_kontrol(ctx.author.id)
 
@@ -3019,6 +3141,7 @@ async def yuksekdusuk(ctx, miktar: str, secim: str):
 
     # xp ve görev
     await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
     await gorev_kontrol(ctx.author.id, "yuksekdusuk", 1)
     await rozet_kontrol(ctx.author.id)
 
@@ -3696,6 +3819,7 @@ async def soygun(ctx, member: discord.Member):
 
     await ctx.send(sonuc)
     await xp_ekle(ctx.author.id, 20)
+    await ewopass_xp_ekle(ctx.author.id, 5)
 
 # ------------------- ADMIN KOMUTLARI -------------------
 ADMIN_ID = 1271933410251772017
@@ -4987,6 +5111,7 @@ async def balıktut(ctx):
         await ctx.send(f"🎣 {balık} Balık tuttun! +{formatla(kazanc)}")
 
     await xp_ekle(ctx.author.id, 5)
+    await ewopass_xp_ekle(ctx.author.id, 5)
 
 # kasa aç 
 @bot.command()
@@ -5051,6 +5176,7 @@ async def kasaaç(ctx, *, kasa_adi: str):
     )
 
     await xp_ekle(ctx.author.id, 15)
+    await ewopass_xp_ekle(ctx.author.id, 5)
 
 # İŞLETME SİSTEMİ
 class IsletmeSelect(discord.ui.Select):
