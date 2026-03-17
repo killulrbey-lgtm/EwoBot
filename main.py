@@ -257,6 +257,14 @@ def get_user(user_id):
                 "money_earned": 0,        # bottan kazanılan toplam para
 
 		"premium_until": 0,
+
+		"ewopass": {
+	        "level": 1,
+ 	        "xp": 0,
+ 	        "claimed_free": [],
+  	        "claimed_elite": [],
+	        "elite": False
+	        },
 		
 		# 📬 DM ayarları
 		"last_active": 0,
@@ -304,6 +312,41 @@ async def send_global_drop():
 
         except:
             pass
+
+def get_pass_xp_required(level):
+    return 100 + (level - 1) * 50
+
+async def ewopass_xp_ekle(user_id, miktar):
+
+    user = get_user(user_id)
+    ep = user.get("ewopass", {})
+
+    # ⭐ PREMIUM 2X
+    simdi = int(time.time())
+    if user.get("premium_until", 0) > simdi:
+        miktar *= 2
+
+    level = ep.get("level", 1)
+    xp = ep.get("xp", 0)
+
+    xp += miktar
+
+    level_up = False
+
+    while xp >= get_pass_xp_required(level) and level < 30:
+        xp -= get_pass_xp_required(level)
+        level += 1
+        level_up = True
+
+    collection.update_one(
+        {"_id": str(user_id)},
+        {"$set": {
+            "ewopass.level": level,
+            "ewopass.xp": xp
+        }}
+    )
+
+    return level_up
 
 async def xp_ekle(user_id, miktar):
 
@@ -893,6 +936,89 @@ def enflasyon_orani():
     REFERANS = 5_000_000
     oran = toplam / REFERANS
     return max(0.5, min(5, oran))
+
+FREE_REWARDS = {
+1: {"para": 2500},
+2: {"envanter.Bronz Kasa": 1},
+3: {"para": 1000},
+4: {"envanter.Olta": 2},
+5: {"envanter.Silah": 1},
+6: {"para": 3000},
+7: {"envanter.Bronz Kasa": 3},
+8: {"para": 2000},
+9: {"envanter.Altın Kasa": 1},
+10: {"yatirimlar.Dolar": 1},
+11: {"para": 5000},
+12: {"xp": 100},
+13: {"envanter.Yüzük": 1},
+14: {"para": 4000},
+15: {"envanter.Elmas Kasa": 1},
+
+16: {"para": 6000},
+17: {"envanter.Gümüş Kasa": 2},
+18: {"para": 5000},
+19: {"envanter.Olta": 3},
+20: {"yatirimlar.Altın": 1},
+21: {"para": 8000},
+22: {"envanter.Silah": 1},
+23: {"xp": 150},
+24: {"para": 7000},
+25: {"envanter.Altın Kasa": 2},
+26: {"para": 9000},
+27: {"envanter.Yüzük": 1},
+28: {"xp": 200},
+29: {"para": 10000},
+30: {"envanter.Premium Kasa": 1},
+}
+
+ELITE_REWARDS = {
+1: {"yatirimlar.Altın": 1},
+2: {"para": 5000},
+3: {"envanter.Premium Kasa": 1},
+4: {"envanter.Olta": 5},
+5: {"xp": 300},
+6: {"para": 10000},
+7: {"envanter.EwoPlus Kasa": 1},
+8: {"envanter.Yüzük": 1},
+9: {"envanter.Silah": 2},
+10: {"yatirimlar.Bitcoin": 1},
+11: {"para": 25000},
+12: {"envanter.Özel Koruma": 2},
+13: {"xp": 500},
+14: {"para": 50000},
+15: {"envanter.Altın Kasa": 5},
+
+16: {"para": 30000},
+17: {"envanter.Elmas Kasa": 2},
+18: {"xp": 600},
+19: {"yatirimlar.Elmas": 1},
+20: {"para": 40000},
+21: {"envanter.EwoPlus Kasa": 1},
+22: {"xp": 700},
+23: {"para": 50000},
+24: {"envanter.Altın Kasa": 3},
+25: {"xp": 800},
+26: {"para": 60000},
+27: {"envanter.Özel Koruma": 3},
+28: {"xp": 900},
+29: {"para": 75000},
+31: {"yatirimlar.Plus": 1},
+}
+
+
+def odul_ver(user_id, reward):
+
+    inc_data = {}
+
+    for k, v in reward.items():
+        inc_data[k] = v
+
+    collection.update_one(
+        {"_id": str(user_id)},
+        {"$inc": inc_data}
+    )
+
+
 
 MARKET_URUNLERI = {
     "Bronz Kasa": {"fiyat": 500},
@@ -3786,38 +3912,6 @@ async def onemliduyuru(ctx, *, mesaj):
 
     await mesaj_obj.edit(embed=final_embed)
 
-# Loglama Sistemi ------------------------------
-DESTEK_SUNUCU_ID = 1471843922115301493
-LOG_KANAL_ID = 1474500638581854351
-EKLEME_LOG_KANAL = 1474500594554372247
-PANEL_KANAL_ID = 1474500454653100142
-PANEL_SUNUCU_ID = 1471843922115301493
-PANEL_LOG_KANAL = 1474501447721943061
-
-@bot.command()
-@commands.cooldown(1, 5, commands.BucketType.user)
-async def logpanel(ctx):
-    if ctx.guild.id != PANEL_SUNUCU_ID:
-        return
-
-    if ctx.channel.id != PANEL_KANAL_ID:
-        return
-
-    view = View()
-
-    async def logs_ac(interaction):
-        kanal = bot.get_channel(PANEL_LOG_KANAL)
-        await kanal.send("📢 Admin log sistemi aktif edildi.")
-
-        await interaction.response.send_message("✅ Log aktif edildi.", ephemeral=True)
-
-    buton = Button(label="Logları Aktif Et", style=discord.ButtonStyle.green)
-    buton.callback = logs_ac
-
-    view.add_item(buton)
-
-    await ctx.send("⚙️ Admin Log Paneli", view=view)
-
 @bot.event
 async def on_member_join(member):
 
@@ -3851,7 +3945,6 @@ MILESTONES = {
 
 MILESTONE_KANAL = 1474497995297918976
 BOT_LOG_KANAL = 1474500594554372247
-
 
 # =====================================================
 # SUNUCUYA EKLENİNCE
@@ -3977,73 +4070,6 @@ async def on_guild_remove(guild):
         embed.set_thumbnail(url=guild.icon.url)
 
     await kanal.send(embed=embed)
-
-# Mesaj silme
-@bot.event
-async def on_message_delete(message):
-    if message.guild and message.guild.id == DESTEK_SUNUCU_ID:
-        kanal = bot.get_channel(LOG_KANAL_ID)
-        if kanal:
-            embed = discord.Embed(
-                title="🗑️ Mesaj Silindi",
-                description=f"{message.author.mention} tarafından gönderilen mesaj silindi.",
-                color=discord.Color.red()
-            )
-            embed.set_thumbnail(url=message.author.avatar.url if message.author.avatar else None)
-            embed.add_field(name="Kanal", value=message.channel.mention)
-            embed.add_field(name="Mesaj", value=message.content or "Görsel / Embed")
-            embed.set_footer(text=f"ID: {message.id}")
-            await kanal.send(embed=embed)
-
-# Mesaj düzenleme
-@bot.event
-async def on_message_edit(before, after):
-    if after.guild and after.guild.id == DESTEK_SUNUCU_ID and before.content != after.content:
-        kanal = bot.get_channel(LOG_KANAL_ID)
-        if kanal:
-            embed = discord.Embed(
-                title="✏️ Mesaj Düzenlendi",
-                description=f"{after.author.mention} mesajını düzenledi.",
-                color=discord.Color.orange()
-            )
-            embed.set_thumbnail(url=after.author.avatar.url if after.author.avatar else None)
-            embed.add_field(name="Kanal", value=after.channel.mention)
-            embed.add_field(name="Eski Mesaj", value=before.content or "Görsel / Embed")
-            embed.add_field(name="Yeni Mesaj", value=after.content or "Görsel / Embed")
-            embed.set_footer(text=f"ID: {after.id}")
-            await kanal.send(embed=embed)
-
-# Rol ekleme / çıkarma
-@bot.event
-async def on_member_update(before, after):
-    if after.guild.id == DESTEK_SUNUCU_ID:
-        kanal = bot.get_channel(LOG_KANAL_ID)
-        if kanal:
-            # Rol eklendi
-            yeni_roller = set(after.roles) - set(before.roles)
-            for rol in yeni_roller:
-                embed = discord.Embed(
-                    title="➕ Rol Eklendi",
-                    description=f"{after.mention} kişisine rol verildi.",
-                    color=discord.Color.green()
-                )
-                embed.set_thumbnail(url=after.avatar.url if after.avatar else None)
-                embed.add_field(name="Rol", value=rol.mention)
-                embed.set_footer(text=f"ID: {after.id}")
-                await kanal.send(embed=embed)
-
-            # Rol çıkarıldı
-            silinen_roller = set(before.roles) - set(after.roles)
-            for rol in silinen_roller:
-                embed = discord.Embed(
-                    title="➖ Rol Çıkarıldı",
-                    description=f"{after.mention} kişisinin rolü alındı.",
-                    color=discord.Color.dark_red()
-                )
-                embed.set_thumbnail(url=after.avatar.url if after.avatar else None)
-                embed.add_field(name="Rol", value=rol.mention)
-                embed.set_footer(text=f"ID: {after.id}")
-                await kanal.send(embed=embed)
 
 TICKET_ADMIN_ID = 1271933410251772017
 TICKET_LOG_KANAL = 1474500533405487155 # ticket formları düşecek kanal
@@ -6932,6 +6958,7 @@ async def mafyasil(ctx, *, isim):
     await ctx.send(f"🗑 **{isim}** mafyası silindi.")
 
 @bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def mafyadevret(ctx, member: discord.Member):
 
     user = get_user(ctx.author.id)
@@ -6962,6 +6989,7 @@ async def mafyadevret(ctx, member: discord.Member):
     await ctx.send(f"👑 Liderlik {member.mention} kullanıcısına devredildi.")
 
 @bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def mafyarolleri(ctx):
 
     user = get_user(ctx.author.id)
@@ -6991,6 +7019,7 @@ async def mafyarolleri(ctx):
     await ctx.send(embed=embed)
 
 @bot.command(name="rololustur")
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def rololustur(ctx, *, args):
 
     user = get_user(ctx.author.id)
@@ -7040,6 +7069,7 @@ async def rololustur(ctx, *, args):
     await ctx.send(f"✅ **{rol}** rolü oluşturuldu. (Rank: {rank})")
 
 @bot.command(name="roldegistir")
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def roldegistir(ctx, member: discord.Member, *, rol):
 
     if member.id == ctx.author.id:
@@ -7093,6 +7123,7 @@ async def roldegistir(ctx, member: discord.Member, *, rol):
     )
 
 @bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def yöneticiver(ctx, *, rol):
 
     user = get_user(ctx.author.id)
@@ -7116,6 +7147,7 @@ async def yöneticiver(ctx, *, rol):
     await ctx.send("❌ Rol bulunamadı.")
 
 @bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def yöneticikaldir(ctx, *, rol):
 
     user = get_user(ctx.author.id)
@@ -7140,6 +7172,7 @@ async def yöneticikaldir(ctx, *, rol):
 
 
 @bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def rolkaldir(ctx, *, rol):
 
     user = get_user(ctx.author.id)
@@ -7168,6 +7201,7 @@ async def rolkaldir(ctx, *, rol):
     await ctx.send(f"🗑 **{rol}** rolü silindi.")
 
 @bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def mafyalistesi(ctx):
 
     user = get_user(ctx.author.id)
@@ -7202,6 +7236,7 @@ async def mafyalistesi(ctx):
     await ctx.send(embed=embed)
 
 @bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def mafyarol(ctx):
 
     user = get_user(ctx.author.id)
@@ -7228,6 +7263,7 @@ async def mafyarol(ctx):
     await ctx.send(embed=embed)
 
 @bot.command(name="rolisimdegistir")
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def rolisimdegistir(ctx, eski_rol, *, yeni_rol):
 
     user = get_user(ctx.author.id)
@@ -7257,6 +7293,7 @@ async def rolisimdegistir(ctx, eski_rol, *, yeni_rol):
     await ctx.send("❌ Rol bulunamadı.")
 
 @bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def premiumver(ctx, member: discord.Member, gun: int):
 
     if ctx.author.id != BOT_OWNER_ID:
@@ -7282,7 +7319,7 @@ async def premium_kontrol():
 
     users = collection.find({
         "premium_until": {"$lt": simdi},
-        "rozetler": "Premium Üye"
+        "rozetler": {"$in": ["Premium Üye"]}
     })
 
     for user in users:
@@ -7297,7 +7334,9 @@ async def premium_kontrol():
             await uye.send("⭐ Premium süren bitti ve **Premium Üye rozeti** kaldırıldı.")
         except:
             pass
+
 @bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
 async def premium(ctx):
 
     user = get_user(ctx.author.id)
@@ -7352,6 +7391,126 @@ async def premium(ctx):
     embed.set_footer(text=f"{ctx.author.name} • Premium Kullanıcısı")
 
     await ctx.send(embed=embed)
+
+async def claim_rewards(user_id):
+
+    user = get_user(user_id)
+    ep = user["ewopass"]
+
+    level = ep["level"]
+
+    free_claimed = ep.get("claimed_free", [])
+    elite_claimed = ep.get("claimed_elite", [])
+
+    # FREE
+    for lvl in range(1, level+1):
+        if lvl not in free_claimed:
+            odul_ver(user_id, FREE_REWARDS[lvl])
+
+            collection.update_one(
+                {"_id": str(user_id)},
+                {"$push": {"ewopass.claimed_free": lvl}}
+            )
+
+    # ELITE
+    if ep.get("elite"):
+        for lvl in range(1, level+1):
+            if lvl not in elite_claimed:
+                odul_ver(user_id, ELITE_REWARDS[lvl])
+
+                collection.update_one(
+                    {"_id": str(user_id)},
+                    {"$push": {"ewopass.claimed_elite": lvl}}
+                )
+
+class EwoPassView(discord.ui.View):
+
+    def __init__(self, ctx, page=0):
+        super().__init__(timeout=120)
+        self.ctx = ctx
+        self.page = page
+
+    async def update(self, interaction):
+
+        buffer = await ewopass_resim(interaction.user, self.page)
+
+        await interaction.response.edit_message(
+            attachments=[discord.File(buffer, "pass.png")],
+            view=self
+        )
+
+    @discord.ui.button(label="◀️", style=discord.ButtonStyle.gray)
+    async def back(self, interaction, button):
+
+        if self.page > 0:
+            self.page -= 1
+
+        await self.update(interaction)
+
+    @discord.ui.button(label="▶️", style=discord.ButtonStyle.gray)
+    async def next(self, interaction, button):
+
+        if self.page < 1:
+            self.page += 1
+
+        await self.update(interaction)
+
+    @discord.ui.button(label="🎁 Ödülleri Al", style=discord.ButtonStyle.green)
+    async def claim(self, interaction, button):
+
+        await claim_rewards(interaction.user.id)
+
+        await interaction.response.send_message(
+            "🎉 Tüm uygun ödüller alındı!",
+            ephemeral=True
+        )
+
+        await self.update(interaction)
+
+@bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
+async def ewopass(ctx):
+
+    buffer = await ewopass_resim(ctx.author, 0)
+    view = EwoPassView(ctx, 0)
+
+    await ctx.send(
+        file=discord.File(buffer, "pass.png"),
+        view=view
+    )
+
+@bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
+async def elitepass(ctx):
+
+    user = get_user(ctx.author.id)
+
+    if user["para"] < 2500000:
+        return await ctx.send("❌ Yetersiz bakiye (2.5M gerekli)")
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {"para": -2500000},
+            "$set": {"ewopass.elite": True}
+        }
+    )
+
+    await ctx.send("💎 EwoElite Pass aktif!")
+
+@bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
+async def elitever(ctx, member: discord.Member):
+
+    if ctx.author.id != 1271933410251772017:
+        return
+
+    collection.update_one(
+        {"_id": str(member.id)},
+        {"$set": {"ewopass.elite": True}}
+    )
+
+    await ctx.send("✅ Elite verildi")
 
 # =====================================================
 # DUEL TIMEOUT LOOP
