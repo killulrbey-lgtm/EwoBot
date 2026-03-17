@@ -17,6 +17,13 @@ from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 import io
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def load_icon(name, size=(50,50)):
+    path = os.path.join(BASE_DIR, "assets", name)
+    img = Image.open(path).convert("RGBA")
+    return img.resize(size)
+
 # ================= MONGO =================
 
 MONGO_URI = os.getenv("MONGO_URI")
@@ -420,106 +427,125 @@ def load_icon(name, size=(50,50)):
 async def ewopass_resim(user_obj, page=0):
 
     user = get_user(user_obj.id)
-    ep = user["ewopass"]
+    ep = user.get("ewopass", {})
 
-    level = ep["level"]
-    xp = ep["xp"]
+    level = ep.get("level", 1)
+    xp = ep.get("xp", 0)
+    elite = ep.get("elite", False)
 
-    width = 1500
-    height = 650
+    width = 1400
+    height = 500
 
-    img = Image.new("RGBA", (width, height), (15, 18, 25))
+    img = Image.new("RGB", (width, height), (18,18,18))
     draw = ImageDraw.Draw(img)
 
-    font_big = ImageFont.truetype("Poppins-Bold.ttf", 65)
-    font_mid = ImageFont.truetype("Poppins-Bold.ttf", 30)
-    font_small = ImageFont.truetype("Poppins-Bold.ttf", 22)
+    # ================= FONT =================
+    try:
+        font_path = os.path.join(BASE_DIR, "assets", "Poppins-Bold.ttf")
+        font_big = ImageFont.truetype(font_path, 60)
+        font_mid = ImageFont.truetype(font_path, 28)
+        font_small = ImageFont.truetype(font_path, 22)
+    except:
+        font_big = ImageFont.load_default()
+        font_mid = ImageFont.load_default()
+        font_small = ImageFont.load_default()
 
-    # ===== BAŞLIK =====
-    draw.text((50, 30), "EWO PASS", font=font_big, fill=(255,170,0))
-    draw.text((420, 50), "SEZON 1", font=font_mid, fill=(200,200,200))
+    # ================= ICON LOAD =================
+    kasa = load_icon("kasa.png")
+    altin = load_icon("altin_kasa.png")
+    para = load_icon("para.png")
+    silah = load_icon("silah.png")
+    kilit = load_icon("kilit.png")
+    tik = load_icon("tik.png")
 
-    draw.text((1200, 50), f"SAYFA {page+1}/2", font=font_mid, fill=(180,180,180))
+    # ================= BAŞLIK =================
+    draw.text((40, 30), "EwoPass Sezon 1", font=font_big, fill=(255,255,255))
+    draw.text((40, 100), f"Seviye: {level}   XP: {xp}", font=font_mid, fill=(180,180,180))
 
-    # ===== BAŞLIKLAR =====
-    draw.text((50, 140), "FREE ÖDÜLLER", font=font_mid, fill=(255,255,255))
-    draw.text((50, 330), "EWOELITE ÖDÜLLER", font=font_mid, fill=(255,215,0))
+    # ================= XP BAR =================
+    max_xp = level * 100
+    progress = min(xp / max_xp, 1)
 
+    bar_x, bar_y = 40, 140
+    bar_w, bar_h = 900, 25
+
+    draw.rectangle((bar_x, bar_y, bar_x+bar_w, bar_y+bar_h), fill=(40,40,40))
+    draw.rectangle((bar_x, bar_y, bar_x + int(bar_w * progress), bar_y+bar_h), fill=(0,200,255))
+
+    # ================= LEVEL RANGE =================
     start = page * 15 + 1
     end = start + 14
 
-    icons = [
-        "para.png",
-        "kasa.png",
-        "altin_kasa.png",
-        "silah.png"
+    x_start = 60
+    gap = 85
+
+    y_free = 200
+    y_elite = 330
+
+    # ================= ÖRNEK ÖDÜL TİPLERİ =================
+    reward_types = [
+        "para", "kasa", "silah", "para", "altin",
+        "para", "kasa", "silah", "para", "altin",
+        "para", "kasa", "silah", "para", "altin"
     ]
 
-    x_start = 60
-
+    # ================= DRAW =================
     for i, lvl in enumerate(range(start, end+1)):
 
-        x = x_start + i * 95
+        box_x = x_start + i * gap
 
-        icon_name = icons[lvl % len(icons)]
-        icon = load_icon(icon_name)
+        reward_type = reward_types[i % len(reward_types)]
 
-        # ===== FREE =====
-        box_color = (60,130,200) if lvl <= level else (40,40,40)
+        # icon seç
+        if reward_type == "para":
+            icon = para
+        elif reward_type == "kasa":
+            icon = kasa
+        elif reward_type == "altin":
+            icon = altin
+        elif reward_type == "silah":
+            icon = silah
 
-        draw.rounded_rectangle((x, 180, x+80, 260), radius=12, fill=box_color)
+        # ---------- FREE ----------
+        free_color = (70,130,180) if lvl <= level else (50,50,50)
 
-        img.paste(icon, (x+15, 190), icon)
+        draw.rectangle((box_x, y_free, box_x+70, y_free+70), fill=free_color, outline=(255,255,255))
 
-        draw.text((x+25, 240), str(lvl), font=font_small, fill=(255,255,255))
+        img.paste(icon, (box_x+10, y_free+10), icon)
 
-        # CLAIM TİK
-        if lvl <= level and lvl in ep.get("claimed_free", []):
-            tik = load_icon("tik.png", (30,30))
-            img.paste(tik, (x+45, 180), tik)
+        draw.text((box_x+20, y_free+75), str(lvl), font=font_small, fill=(255,255,255))
 
-        # ===== ELITE =====
-        if ep.get("elite"):
-            elite_color = (255,200,0) if lvl <= level else (70,70,70)
+        # claim tik
+        if lvl <= level:
+            img.paste(tik, (box_x+45, y_free+45), tik)
+
+        # ---------- ELITE ----------
+        if elite:
+            elite_color = (255,215,0) if lvl <= level else (70,70,70)
         else:
-            elite_color = (25,25,25)
+            elite_color = (35,35,35)
 
-        draw.rounded_rectangle((x, 370, x+80, 450), radius=12, fill=elite_color)
+        draw.rectangle((box_x, y_elite, box_x+70, y_elite+70), fill=elite_color, outline=(255,255,255))
 
-        if ep.get("elite"):
-            img.paste(icon, (x+15, 380), icon)
-
-            if lvl <= level and lvl in ep.get("claimed_elite", []):
-                tik = load_icon("tik.png", (30,30))
-                img.paste(tik, (x+45, 370), tik)
+        if not elite:
+            img.paste(kilit, (box_x+15, y_elite+15), kilit)
         else:
-            kilit = load_icon("kilit.png", (35,35))
-            img.paste(kilit, (x+22, 395), kilit)
+            img.paste(icon, (box_x+10, y_elite+10), icon)
 
-        draw.text((x+25, 430), str(lvl), font=font_small, fill=(255,255,255))
+            if lvl <= level:
+                img.paste(tik, (box_x+45, y_elite+45), tik)
 
-    # ===== XP BAR =====
-    max_xp = level * 100
-    oran = min(xp / max_xp, 1)
+        draw.text((box_x+20, y_elite+75), str(lvl), font=font_small, fill=(255,255,255))
 
-    bar_x = 250
-    bar_y = 520
-    bar_w = 900
-    bar_h = 30
+    # ================= LABELS =================
+    draw.text((40, y_free-40), "FREE", font=font_mid, fill=(120,180,255))
+    draw.text((40, y_elite-40), "EWOELITE", font=font_mid, fill=(255,215,0))
 
-    draw.rounded_rectangle((bar_x, bar_y, bar_x+bar_w, bar_y+bar_h), 10, fill=(40,40,40))
-    draw.rounded_rectangle((bar_x, bar_y, bar_x + int(bar_w*oran), bar_y+bar_h), 10, fill=(255,180,0))
+    # ================= ALT YAZI =================
+    status = "AKTİF" if elite else "AKTİF DEĞİL"
+    draw.text((40, 450), f"EwoElite Durumu: {status}", font=font_small, fill=(255,120,120))
 
-    draw.text((bar_x, bar_y-40), f"XP: {xp} / {max_xp}", font=font_small, fill=(255,255,255))
-
-    # ===== BUTON =====
-    draw.rounded_rectangle((550, 570, 950, 630), 12, fill=(0,200,120))
-    draw.text((630, 585), "ÖDÜLLERİ TOPLA", font=font_mid, fill=(255,255,255))
-
-    # ===== ELITE DURUM =====
-    status = "AKTİF" if ep.get("elite") else "KAPALI"
-    draw.text((50, 600), f"EwoElite: {status}", font=font_small, fill=(255,120,120))
-
+    # ================= OUTPUT =================
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
@@ -1217,6 +1243,127 @@ async def param(ctx):
     await ctx.send(
         f"💰 {ctx.author.mention}, Paran: **{formatla(user['para'])} EwoCoin**"
     )
+async def claim_rewards(user_id):
+
+    user = get_user(user_id)
+    ep = user["ewopass"]
+
+    level = ep["level"]
+
+    free_claimed = ep.get("claimed_free", [])
+    elite_claimed = ep.get("claimed_elite", [])
+
+    # FREE
+    for lvl in range(1, level+1):
+        if lvl not in free_claimed:
+            odul_ver(user_id, FREE_REWARDS[lvl])
+
+            collection.update_one(
+                {"_id": str(user_id)},
+                {"$push": {"ewopass.claimed_free": lvl}}
+            )
+
+    # ELITE
+    if ep.get("elite"):
+        for lvl in range(1, level+1):
+            if lvl not in elite_claimed:
+                odul_ver(user_id, ELITE_REWARDS[lvl])
+
+                collection.update_one(
+                    {"_id": str(user_id)},
+                    {"$push": {"ewopass.claimed_elite": lvl}}
+                )
+
+class EwoPassView(discord.ui.View):
+
+    def __init__(self, ctx, page=0):
+        super().__init__(timeout=120)
+        self.ctx = ctx
+        self.page = page
+
+    async def update(self, interaction):
+
+        buffer = await ewopass_resim(interaction.user, self.page)
+
+        await interaction.response.edit_message(
+            attachments=[discord.File(buffer, "pass.png")],
+            view=self
+        )
+
+    @discord.ui.button(label="◀️", style=discord.ButtonStyle.gray)
+    async def back(self, interaction, button):
+
+        if self.page > 0:
+            self.page -= 1
+
+        await self.update(interaction)
+
+    @discord.ui.button(label="▶️", style=discord.ButtonStyle.gray)
+    async def next(self, interaction, button):
+
+        if self.page < 1:
+            self.page += 1
+
+        await self.update(interaction)
+
+    @discord.ui.button(label="🎁 Ödülleri Al", style=discord.ButtonStyle.green)
+    async def claim(self, interaction, button):
+
+        await claim_rewards(interaction.user.id)
+
+        await interaction.response.send_message(
+            "🎉 Tüm uygun ödüller alındı!",
+            ephemeral=True
+        )
+
+        await self.update(interaction)
+
+
+@bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
+async def ewopass(ctx):
+
+    buffer = await ewopass_resim(ctx.author, 0)
+    view = EwoPassView(ctx, 0)
+
+    await ctx.send(
+        file=discord.File(buffer, "pass.png"),
+        view=view
+    )
+
+@bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
+async def elitepass(ctx):
+
+    user = get_user(ctx.author.id)
+
+    if user["para"] < 2500000:
+        return await ctx.send("❌ Yetersiz bakiye (2.5M gerekli)")
+
+    collection.update_one(
+        {"_id": str(ctx.author.id)},
+        {
+            "$inc": {"para": -2500000},
+            "$set": {"ewopass.elite": True}
+        }
+    )
+
+    await ctx.send("💎 EwoElite Pass aktif!")
+
+@bot.command()
+@commands.cooldown(1, 7, commands.BucketType.user)
+async def elitever(ctx, member: discord.Member):
+
+    if ctx.author.id != 1271933410251772017:
+        return
+
+    collection.update_one(
+        {"_id": str(member.id)},
+        {"$set": {"ewopass.elite": True}}
+    )
+
+    await ctx.send("✅ Elite verildi")
+
 
 @bot.command(name="paragönder")
 async def paragonder(ctx, member: discord.Member, miktar: int):
@@ -7518,125 +7665,7 @@ async def premium(ctx):
 
     await ctx.send(embed=embed)
 
-async def claim_rewards(user_id):
 
-    user = get_user(user_id)
-    ep = user["ewopass"]
-
-    level = ep["level"]
-
-    free_claimed = ep.get("claimed_free", [])
-    elite_claimed = ep.get("claimed_elite", [])
-
-    # FREE
-    for lvl in range(1, level+1):
-        if lvl not in free_claimed:
-            odul_ver(user_id, FREE_REWARDS[lvl])
-
-            collection.update_one(
-                {"_id": str(user_id)},
-                {"$push": {"ewopass.claimed_free": lvl}}
-            )
-
-    # ELITE
-    if ep.get("elite"):
-        for lvl in range(1, level+1):
-            if lvl not in elite_claimed:
-                odul_ver(user_id, ELITE_REWARDS[lvl])
-
-                collection.update_one(
-                    {"_id": str(user_id)},
-                    {"$push": {"ewopass.claimed_elite": lvl}}
-                )
-
-class EwoPassView(discord.ui.View):
-
-    def __init__(self, ctx, page=0):
-        super().__init__(timeout=120)
-        self.ctx = ctx
-        self.page = page
-
-    async def update(self, interaction):
-
-        buffer = await ewopass_resim(interaction.user, self.page)
-
-        await interaction.response.edit_message(
-            attachments=[discord.File(buffer, "pass.png")],
-            view=self
-        )
-
-    @discord.ui.button(label="◀️", style=discord.ButtonStyle.gray)
-    async def back(self, interaction, button):
-
-        if self.page > 0:
-            self.page -= 1
-
-        await self.update(interaction)
-
-    @discord.ui.button(label="▶️", style=discord.ButtonStyle.gray)
-    async def next(self, interaction, button):
-
-        if self.page < 1:
-            self.page += 1
-
-        await self.update(interaction)
-
-    @discord.ui.button(label="🎁 Ödülleri Al", style=discord.ButtonStyle.green)
-    async def claim(self, interaction, button):
-
-        await claim_rewards(interaction.user.id)
-
-        await interaction.response.send_message(
-            "🎉 Tüm uygun ödüller alındı!",
-            ephemeral=True
-        )
-
-        await self.update(interaction)
-
-@bot.command()
-@commands.cooldown(1, 7, commands.BucketType.user)
-async def ewopass(ctx):
-
-    buffer = await ewopass_resim(ctx.author, 0)
-    view = EwoPassView(ctx, 0)
-
-    await ctx.send(
-        file=discord.File(buffer, "pass.png"),
-        view=view
-    )
-
-@bot.command()
-@commands.cooldown(1, 7, commands.BucketType.user)
-async def elitepass(ctx):
-
-    user = get_user(ctx.author.id)
-
-    if user["para"] < 2500000:
-        return await ctx.send("❌ Yetersiz bakiye (2.5M gerekli)")
-
-    collection.update_one(
-        {"_id": str(ctx.author.id)},
-        {
-            "$inc": {"para": -2500000},
-            "$set": {"ewopass.elite": True}
-        }
-    )
-
-    await ctx.send("💎 EwoElite Pass aktif!")
-
-@bot.command()
-@commands.cooldown(1, 7, commands.BucketType.user)
-async def elitever(ctx, member: discord.Member):
-
-    if ctx.author.id != 1271933410251772017:
-        return
-
-    collection.update_one(
-        {"_id": str(member.id)},
-        {"$set": {"ewopass.elite": True}}
-    )
-
-    await ctx.send("✅ Elite verildi")
 
 # =====================================================
 # DUEL TIMEOUT LOOP
