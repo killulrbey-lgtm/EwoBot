@@ -478,15 +478,10 @@ async def ewopass_resim(user_obj, page=0):
     draw = ImageDraw.Draw(img)
 
     # ================= FONT =================
-    try:
-        font_path = os.path.join(BASE_DIR, "assets", "Poppins-Bold.ttf")
-        font_big = ImageFont.truetype(font_path, 80)
-        font_mid = ImageFont.truetype(font_path, 40)
-        font_small = ImageFont.truetype(font_path, 28)
-    except:
-        font_big = ImageFont.load_default()
-        font_mid = ImageFont.load_default()
-        font_small = ImageFont.load_default()
+    font_path = os.path.join(BASE_DIR, "assets", "Poppins-Bold.ttf")
+    font_big = ImageFont.truetype(font_path, 90)
+    font_mid = ImageFont.truetype(font_path, 55)
+    font_small = ImageFont.truetype(font_path, 34)
 
     # ================= ICONS =================
     kasa = load_icon("kasa.png")
@@ -497,23 +492,31 @@ async def ewopass_resim(user_obj, page=0):
     tik = load_icon("tik.png", (20,20))
 
     # ================= HEADER =================
-    draw_text_outline(draw, (40, 30), "EwoPass", font_big, (255,200,0))
-    draw_text_outline(draw, (40, 110), "SEZON 1", font_mid, (255,255,255))
+    title_text = "EWOPASS  •  SEZON 1"
+
+    draw.rectangle((30, 30, 600, 120), fill=(0,0,0,120), outline=(255,200,0), width=3)
+    draw_text_outline(draw, (50, 45), title_text, font_mid, (255,220,120))
 
     # ================= XP BAR =================
-    max_xp = level * 100
+    max_xp = get_pass_xp_required(level)
     progress = min(xp / max_xp, 1)
 
-    draw.rectangle((40, 150, 940, 180), fill=(20,20,20))
-    draw.rectangle((40, 150, 40 + int(900 * progress), 180), fill=(255,200,0))
+    draw.rectangle((40, 170, 940, 210), fill=(15,15,15))
+    draw.rectangle((40, 170, 40 + int(900 * progress), 210), fill=(255,200,0))
 
-    # ================= LEVEL =================
+    xp_text = f"{xp} / {max_xp}"
+    bbox = draw.textbbox((0,0), xp_text, font=font_small)
+    w = bbox[2] - bbox[0]
+
+    draw_text_outline(draw, (490 - w//2, 175), xp_text, font_small, (255,255,255))
+
+    # ================= LEVEL BOXES =================
     start = page * 15 + 1
     x_start = 60
     gap = 85
 
-    y_free = 240
-    y_elite = 390
+    y_free = 260
+    y_elite = 410
 
     reward_types = [
         "para", "kasa", "silah", "para", "altin",
@@ -535,7 +538,7 @@ async def ewopass_resim(user_obj, page=0):
             "silah": silah
         }[rt]
 
-        # ---------- FREE ----------
+        # FREE
         outline = (0,200,255) if lvl not in claimed_free else (0,255,120)
 
         draw.rectangle((box_x, y_free, box_x+70, y_free+70),
@@ -549,7 +552,7 @@ async def ewopass_resim(user_obj, page=0):
         draw_text_outline(draw, (box_x+15, y_free+75), str(lvl), font_small, (255,255,255))
         draw_text_outline(draw, (box_x-10, y_free+105), text, font_small, (255,255,255))
 
-        # ---------- ELITE ----------
+        # ELITE
         draw.rectangle((box_x, y_elite, box_x+70, y_elite+70),
                        fill=(80,60,20), outline=(255,200,0), width=3)
 
@@ -561,7 +564,6 @@ async def ewopass_resim(user_obj, page=0):
 
             small_lock = kilit.resize((25,25))
             img.paste(small_lock, (box_x+22, y_elite+22), small_lock)
-
         else:
             if lvl in claimed_elite:
                 img.paste(tik, (box_x+45, y_elite+45), tik)
@@ -569,15 +571,17 @@ async def ewopass_resim(user_obj, page=0):
         draw_text_outline(draw, (box_x+15, y_elite+75), str(lvl), font_small, (255,255,255))
         draw_text_outline(draw, (box_x-10, y_elite+105), text, font_small, (255,215,0))
 
-    # ================= LABEL =================
-    draw_text_outline(draw, (40, y_free-50), "FREE", font_mid, (0,200,255))
-    draw_text_outline(draw, (40, y_elite-50), "EWOELITE PASS", font_mid, (255,200,0))
+    # ================= LABELS =================
+    draw.rectangle((30, y_free-60, 250, y_free-10), fill=(0,0,0,120), outline=(0,200,255), width=2)
+    draw_text_outline(draw, (45, y_free-55), "FREE", font_mid, (0,200,255))
+
+    draw.rectangle((30, y_elite-60, 400, y_elite-10), fill=(0,0,0,120), outline=(255,200,0), width=2)
+    draw_text_outline(draw, (45, y_elite-55), "EWOELITE PASS", font_mid, (255,200,0))
 
     # ================= FOOTER =================
     status = "AKTİF" if elite else "AKTİF DEĞİL"
     draw_text_outline(draw, (40, 480), f"EwoElite: {status}", font_small, (255,120,120))
 
-    # ================= SAVE =================
     buffer = io.BytesIO()
     img.convert("RGB").save(buffer, format="PNG")
     buffer.seek(0)
@@ -1357,24 +1361,56 @@ async def ewopass(ctx):
         view=view
     )
 
+class EliteConfirmView(discord.ui.View):
+    def __init__(self, user):
+        super().__init__(timeout=30)
+        self.user = user
+
+    @discord.ui.button(label="Satın Al (2.5M)", style=discord.ButtonStyle.green)
+    async def buy(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("Bu sana ait değil.", ephemeral=True)
+
+        user_data = get_user(self.user.id)
+
+        if user_data["para"] < 2500000:
+            return await interaction.response.send_message("❌ Yetersiz bakiye!", ephemeral=True)
+
+        collection.update_one(
+            {"_id": str(self.user.id)},
+            {
+                "$inc": {"para": -2500000},
+                "$set": {"ewopass.elite": True}
+            }
+        )
+
+        await interaction.response.edit_message(
+            content="💎 EwoElite Pass aktif edildi!",
+            view=None
+        )
+
 @bot.command()
 @commands.cooldown(1, 7, commands.BucketType.user)
 async def elitepass(ctx):
 
     user = get_user(ctx.author.id)
+    ep = user.get("ewopass", {})
 
-    if user["para"] < 2500000:
-        return await ctx.send("❌ Yetersiz bakiye (2.5M gerekli)")
+    level = ep.get("level", 1)
 
-    collection.update_one(
-        {"_id": str(ctx.author.id)},
-        {
-            "$inc": {"para": -2500000},
-            "$set": {"ewopass.elite": True}
-        }
+    embed = discord.Embed(
+        title="💎 EwoElite Pass",
+        description="Elite pass satın almak istediğine emin misin?",
+        color=0xf1c40f
     )
 
-    await ctx.send("💎 EwoElite Pass aktif!")
+    embed.add_field(name="📊 Seviye", value=f"{level}", inline=True)
+    embed.add_field(name="💰 Fiyat", value="2.500.000 EwoCoin", inline=True)
+
+    embed.set_footer(text="Satın alınca tüm elite ödüller açılır")
+
+    await ctx.send(embed=embed, view=EliteConfirmView(ctx.author))
 
 @bot.command()
 @commands.cooldown(1, 7, commands.BucketType.user)
