@@ -437,6 +437,15 @@ def get_reward_text(reward_type):
     return ""
 
 
+# 🔥 OUTLINE TEXT (EN ÖNEMLİ)
+def draw_text_outline(draw, pos, text, font, fill, outline=(0,0,0)):
+    x, y = pos
+    for dx in [-2, -1, 0, 1, 2]:
+        for dy in [-2, -1, 0, 1, 2]:
+            draw.text((x+dx, y+dy), text, font=font, fill=outline)
+    draw.text((x, y), text, font=font, fill=fill)
+
+
 async def ewopass_resim(user_obj, page=0):
 
     user = get_user(user_obj.id)
@@ -463,7 +472,6 @@ async def ewopass_resim(user_obj, page=0):
     bg = Image.open("assets/background.png").resize((width, height))
     img = bg.convert("RGBA")
 
-    # koyulaştırma overlay
     overlay = Image.new("RGBA", (width, height), (0,0,0,140))
     img = Image.alpha_composite(img, overlay)
 
@@ -472,9 +480,9 @@ async def ewopass_resim(user_obj, page=0):
     # ================= FONT =================
     try:
         font_path = os.path.join(BASE_DIR, "assets", "Poppins-Bold.ttf")
-        font_big = ImageFont.truetype(font_path, 70)
-        font_mid = ImageFont.truetype(font_path, 30)
-        font_small = ImageFont.truetype(font_path, 22)
+        font_big = ImageFont.truetype(font_path, 80)
+        font_mid = ImageFont.truetype(font_path, 40)
+        font_small = ImageFont.truetype(font_path, 28)
     except:
         font_big = ImageFont.load_default()
         font_mid = ImageFont.load_default()
@@ -489,8 +497,8 @@ async def ewopass_resim(user_obj, page=0):
     tik = load_icon("tik.png", (20,20))
 
     # ================= HEADER =================
-    draw.text((40, 30), "EwoPass", font=font_big, fill=(255,200,0))
-    draw.text((40, 110), "SEZON 1", font=font_mid, fill=(255,255,255))
+    draw_text_outline(draw, (40, 30), "EwoPass", font_big, (255,200,0))
+    draw_text_outline(draw, (40, 110), "SEZON 1", font_mid, (255,255,255))
 
     # ================= XP BAR =================
     max_xp = level * 100
@@ -504,8 +512,8 @@ async def ewopass_resim(user_obj, page=0):
     x_start = 60
     gap = 85
 
-    y_free = 220
-    y_elite = 360
+    y_free = 240
+    y_elite = 390
 
     reward_types = [
         "para", "kasa", "silah", "para", "altin",
@@ -513,20 +521,12 @@ async def ewopass_resim(user_obj, page=0):
         "para", "kasa", "silah", "para", "altin"
     ]
 
-    def get_text(rt):
-        return {
-            "para": "2.000 Coin",
-            "kasa": "1x Kasa",
-            "altin": "1x Altın",
-            "silah": "1x Silah"
-        }[rt]
-
     for i in range(15):
 
         lvl = start + i
         box_x = x_start + i * gap
         rt = reward_types[i]
-        text = get_text(rt)
+        text = get_reward_text(rt)
 
         icon = {
             "para": para,
@@ -546,8 +546,8 @@ async def ewopass_resim(user_obj, page=0):
         if lvl in claimed_free:
             img.paste(tik, (box_x+45, y_free+45), tik)
 
-        draw.text((box_x+15, y_free+75), str(lvl), font=font_small, fill=(255,255,255))
-        draw.text((box_x-10, y_free+95), text, font=font_small, fill=(255,255,255))
+        draw_text_outline(draw, (box_x+15, y_free+75), str(lvl), font_small, (255,255,255))
+        draw_text_outline(draw, (box_x-10, y_free+105), text, font_small, (255,255,255))
 
         # ---------- ELITE ----------
         draw.rectangle((box_x, y_elite, box_x+70, y_elite+70),
@@ -566,16 +566,16 @@ async def ewopass_resim(user_obj, page=0):
             if lvl in claimed_elite:
                 img.paste(tik, (box_x+45, y_elite+45), tik)
 
-        draw.text((box_x+15, y_elite+75), str(lvl), font=font_small, fill=(255,255,255))
-        draw.text((box_x-10, y_elite+95), text, font=font_small, fill=(255,215,0))
+        draw_text_outline(draw, (box_x+15, y_elite+75), str(lvl), font_small, (255,255,255))
+        draw_text_outline(draw, (box_x-10, y_elite+105), text, font_small, (255,215,0))
 
     # ================= LABEL =================
-    draw.text((40, y_free-40), "FREE", font=font_mid, fill=(0,200,255))
-    draw.text((40, y_elite-40), "EWOELITE PASS", font=font_mid, fill=(255,200,0))
+    draw_text_outline(draw, (40, y_free-50), "FREE", font_mid, (0,200,255))
+    draw_text_outline(draw, (40, y_elite-50), "EWOELITE PASS", font_mid, (255,200,0))
 
     # ================= FOOTER =================
     status = "AKTİF" if elite else "AKTİF DEĞİL"
-    draw.text((40, 480), f"EwoElite: {status}", font=font_small, fill=(255,100,100))
+    draw_text_outline(draw, (40, 480), f"EwoElite: {status}", font_small, (255,120,120))
 
     # ================= SAVE =================
     buffer = io.BytesIO()
