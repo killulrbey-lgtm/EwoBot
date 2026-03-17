@@ -424,130 +424,162 @@ def load_icon(name, size=(50,50)):
     img = Image.open(f"assets/{name}").convert("RGBA")
     return img.resize(size)
 
+
+def get_reward_text(reward_type):
+    if reward_type == "para":
+        return "2.000 EwoCoin"
+    elif reward_type == "kasa":
+        return "1x Kasa"
+    elif reward_type == "altin":
+        return "1x Altın Kasa"
+    elif reward_type == "silah":
+        return "1x Silah"
+    return ""
+
+
 async def ewopass_resim(user_obj, page=0):
 
     user = get_user(user_obj.id)
-    ep = user.get("ewopass", {})
+
+    ep = user.get("ewopass", {
+        "level": 1,
+        "xp": 0,
+        "elite": False,
+        "claimed_free": [],
+        "claimed_elite": []
+    })
 
     level = ep.get("level", 1)
     xp = ep.get("xp", 0)
     elite = ep.get("elite", False)
 
-    width = 1400
-    height = 500
+    claimed_free = ep.get("claimed_free", [])
+    claimed_elite = ep.get("claimed_elite", [])
 
-    img = Image.new("RGB", (width, height), (18,18,18))
+    width = 1400
+    height = 520
+
+    # ================= BACKGROUND =================
+    bg = Image.open("assets/background.png").resize((width, height))
+    img = bg.convert("RGBA")
+
+    # koyulaştırma overlay
+    overlay = Image.new("RGBA", (width, height), (0,0,0,140))
+    img = Image.alpha_composite(img, overlay)
+
     draw = ImageDraw.Draw(img)
 
     # ================= FONT =================
     try:
         font_path = os.path.join(BASE_DIR, "assets", "Poppins-Bold.ttf")
-        font_big = ImageFont.truetype(font_path, 60)
-        font_mid = ImageFont.truetype(font_path, 28)
+        font_big = ImageFont.truetype(font_path, 70)
+        font_mid = ImageFont.truetype(font_path, 30)
         font_small = ImageFont.truetype(font_path, 22)
     except:
         font_big = ImageFont.load_default()
         font_mid = ImageFont.load_default()
         font_small = ImageFont.load_default()
 
-    # ================= ICON LOAD =================
+    # ================= ICONS =================
     kasa = load_icon("kasa.png")
     altin = load_icon("altin_kasa.png")
     para = load_icon("para.png")
     silah = load_icon("silah.png")
     kilit = load_icon("kilit.png")
-    tik = load_icon("tik.png")
+    tik = load_icon("tik.png", (20,20))
 
-    # ================= BAŞLIK =================
-    draw.text((40, 30), "EwoPass Sezon 1", font=font_big, fill=(255,255,255))
-    draw.text((40, 100), f"Seviye: {level}   XP: {xp}", font=font_mid, fill=(180,180,180))
+    # ================= HEADER =================
+    draw.text((40, 30), "EwoPass", font=font_big, fill=(255,200,0))
+    draw.text((40, 110), "SEZON 1", font=font_mid, fill=(255,255,255))
 
     # ================= XP BAR =================
     max_xp = level * 100
     progress = min(xp / max_xp, 1)
 
-    bar_x, bar_y = 40, 140
-    bar_w, bar_h = 900, 25
+    draw.rectangle((40, 150, 940, 180), fill=(20,20,20))
+    draw.rectangle((40, 150, 40 + int(900 * progress), 180), fill=(255,200,0))
 
-    draw.rectangle((bar_x, bar_y, bar_x+bar_w, bar_y+bar_h), fill=(40,40,40))
-    draw.rectangle((bar_x, bar_y, bar_x + int(bar_w * progress), bar_y+bar_h), fill=(0,200,255))
-
-    # ================= LEVEL RANGE =================
+    # ================= LEVEL =================
     start = page * 15 + 1
-    end = start + 14
-
     x_start = 60
     gap = 85
 
-    y_free = 200
-    y_elite = 330
+    y_free = 220
+    y_elite = 360
 
-    # ================= ÖRNEK ÖDÜL TİPLERİ =================
     reward_types = [
         "para", "kasa", "silah", "para", "altin",
         "para", "kasa", "silah", "para", "altin",
         "para", "kasa", "silah", "para", "altin"
     ]
 
-    # ================= DRAW =================
-    for i, lvl in enumerate(range(start, end+1)):
+    def get_text(rt):
+        return {
+            "para": "2.000 Coin",
+            "kasa": "1x Kasa",
+            "altin": "1x Altın",
+            "silah": "1x Silah"
+        }[rt]
 
+    for i in range(15):
+
+        lvl = start + i
         box_x = x_start + i * gap
+        rt = reward_types[i]
+        text = get_text(rt)
 
-        reward_type = reward_types[i % len(reward_types)]
-
-        # icon seç
-        if reward_type == "para":
-            icon = para
-        elif reward_type == "kasa":
-            icon = kasa
-        elif reward_type == "altin":
-            icon = altin
-        elif reward_type == "silah":
-            icon = silah
+        icon = {
+            "para": para,
+            "kasa": kasa,
+            "altin": altin,
+            "silah": silah
+        }[rt]
 
         # ---------- FREE ----------
-        free_color = (70,130,180) if lvl <= level else (50,50,50)
+        outline = (0,200,255) if lvl not in claimed_free else (0,255,120)
 
-        draw.rectangle((box_x, y_free, box_x+70, y_free+70), fill=free_color, outline=(255,255,255))
+        draw.rectangle((box_x, y_free, box_x+70, y_free+70),
+                       fill=(40,40,40), outline=outline, width=3)
 
         img.paste(icon, (box_x+10, y_free+10), icon)
 
-        draw.text((box_x+20, y_free+75), str(lvl), font=font_small, fill=(255,255,255))
-
-        # claim tik
-        if lvl <= level:
+        if lvl in claimed_free:
             img.paste(tik, (box_x+45, y_free+45), tik)
 
-        # ---------- ELITE ----------
-        if elite:
-            elite_color = (255,215,0) if lvl <= level else (70,70,70)
-        else:
-            elite_color = (35,35,35)
+        draw.text((box_x+15, y_free+75), str(lvl), font=font_small, fill=(255,255,255))
+        draw.text((box_x-10, y_free+95), text, font=font_small, fill=(255,255,255))
 
-        draw.rectangle((box_x, y_elite, box_x+70, y_elite+70), fill=elite_color, outline=(255,255,255))
+        # ---------- ELITE ----------
+        draw.rectangle((box_x, y_elite, box_x+70, y_elite+70),
+                       fill=(80,60,20), outline=(255,200,0), width=3)
+
+        img.paste(icon, (box_x+10, y_elite+10), icon)
 
         if not elite:
-            img.paste(kilit, (box_x+15, y_elite+15), kilit)
-        else:
-            img.paste(icon, (box_x+10, y_elite+10), icon)
+            dark = Image.new("RGBA", (70,70), (0,0,0,160))
+            img.paste(dark, (box_x, y_elite), dark)
 
-            if lvl <= level:
+            small_lock = kilit.resize((25,25))
+            img.paste(small_lock, (box_x+22, y_elite+22), small_lock)
+
+        else:
+            if lvl in claimed_elite:
                 img.paste(tik, (box_x+45, y_elite+45), tik)
 
-        draw.text((box_x+20, y_elite+75), str(lvl), font=font_small, fill=(255,255,255))
+        draw.text((box_x+15, y_elite+75), str(lvl), font=font_small, fill=(255,255,255))
+        draw.text((box_x-10, y_elite+95), text, font=font_small, fill=(255,215,0))
 
-    # ================= LABELS =================
-    draw.text((40, y_free-40), "FREE", font=font_mid, fill=(120,180,255))
-    draw.text((40, y_elite-40), "EWOELITE", font=font_mid, fill=(255,215,0))
+    # ================= LABEL =================
+    draw.text((40, y_free-40), "FREE", font=font_mid, fill=(0,200,255))
+    draw.text((40, y_elite-40), "EWOELITE PASS", font=font_mid, fill=(255,200,0))
 
-    # ================= ALT YAZI =================
+    # ================= FOOTER =================
     status = "AKTİF" if elite else "AKTİF DEĞİL"
-    draw.text((40, 450), f"EwoElite Durumu: {status}", font=font_small, fill=(255,120,120))
+    draw.text((40, 480), f"EwoElite: {status}", font=font_small, fill=(255,100,100))
 
-    # ================= OUTPUT =================
+    # ================= SAVE =================
     buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
+    img.convert("RGB").save(buffer, format="PNG")
     buffer.seek(0)
 
     return buffer
@@ -1282,7 +1314,6 @@ class EwoPassView(discord.ui.View):
         self.page = page
 
     async def update(self, interaction):
-
         buffer = await ewopass_resim(interaction.user, self.page)
 
         await interaction.response.edit_message(
@@ -1290,32 +1321,27 @@ class EwoPassView(discord.ui.View):
             view=self
         )
 
-    @discord.ui.button(label="◀️", style=discord.ButtonStyle.gray)
+    @discord.ui.button(label="◀️ Geri", style=discord.ButtonStyle.secondary, row=0)
     async def back(self, interaction, button):
-
         if self.page > 0:
             self.page -= 1
-
         await self.update(interaction)
 
-    @discord.ui.button(label="▶️", style=discord.ButtonStyle.gray)
-    async def next(self, interaction, button):
-
-        if self.page < 1:
-            self.page += 1
-
-        await self.update(interaction)
-
-    @discord.ui.button(label="🎁 Ödülleri Al", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="🎁 Ödülleri Al", style=discord.ButtonStyle.success, row=0)
     async def claim(self, interaction, button):
-
         await claim_rewards(interaction.user.id)
 
         await interaction.response.send_message(
-            "🎉 Tüm uygun ödüller alındı!",
+            "🎉 Ödüller alındı!",
             ephemeral=True
         )
 
+        await self.update(interaction)
+
+    @discord.ui.button(label="İleri ▶️", style=discord.ButtonStyle.secondary, row=0)
+    async def next(self, interaction, button):
+        if self.page < 1:
+            self.page += 1
         await self.update(interaction)
 
 
@@ -3606,28 +3632,6 @@ async def davet(ctx):
         view=view
     )
 
-# ------------------- GLOBAL / SUNUCU ÖZEL AYARLARI -------------------
-DESTEK_SUNUCU_ID = 1471843922115301493
-DESTEK_ROL_ID = 1474482319443361945
-KATILIM_CIKIS_KANAL_ID = 1474485498415153374
-
-@bot.event
-async def on_member_join(member):
-    if member.guild.id == DESTEK_SUNUCU_ID:
-        rol = member.guild.get_role(DESTEK_ROL_ID)
-        if rol:
-            await member.add_roles(rol)
-        kanal = bot.get_channel(KATILIM_CIKIS_KANAL_ID)
-        if kanal:
-            await kanal.send(f"✅ {member.mention} sunucuya katıldı!")
-
-@bot.event
-async def on_member_remove(member):
-    if member.guild.id == DESTEK_SUNUCU_ID:
-        kanal = bot.get_channel(KATILIM_CIKIS_KANAL_ID)
-        if kanal:
-            await kanal.send(f"❌ {member.mention} sunucudan ayrıldı!")
-
 # Help kapatma 
 @bot.command()
 async def help(ctx):
@@ -4182,17 +4186,6 @@ async def onemliduyuru(ctx, *, mesaj):
     )
 
     await mesaj_obj.edit(embed=final_embed)
-
-@bot.event
-async def on_member_join(member):
-
-    if member.guild.id != GUILD_ID:
-        return
-
-    role = member.guild.get_role(ROLE_ID)
-
-    if TAG in member.display_name:
-        await member.add_roles(role, reason="Guild tag ile giriş yaptı")
 
 # ===============================
 # YENİ INVITE OLUŞURSA CACHE GÜNCELLE
